@@ -38,14 +38,14 @@ defmodule NestruErrorPathTest do
     map = %{
       orders: [
         %{id: "1"},
-        %{id: "2", totals: wrong_item}
+        %{:id => "2", "totals" => wrong_item}
       ]
     }
 
-    expected_get_in_keys = [Access.key!(:orders), Access.at!(1), Access.key!(:totals)]
+    expected_get_in_keys = [Access.key!(:orders), Access.at!(1), Access.key!("totals")]
     assert get_in(map, expected_get_in_keys) == wrong_item
 
-    expected_path = [:orders, 1, :totals]
+    expected_path = [:orders, 1, "totals"]
 
     assert {:error, %{get_in_keys: ^expected_get_in_keys, path: ^expected_path}} =
              Nestru.from_map(map, OrdersBook)
@@ -53,7 +53,7 @@ defmodule NestruErrorPathTest do
     expected_regex =
       regex_substring("""
       See details by calling get_in/2 with the map and the following \
-      keys: [Access.key!(:orders), Access.at!(1), Access.key!(:totals)]\
+      keys: [Access.key!(:orders), Access.at!(1), Access.key!("totals")]\
       """)
 
     assert_raise RuntimeError, expected_regex, fn ->
@@ -71,7 +71,7 @@ defmodule NestruErrorPathTest do
     end
   end
 
-  test "Nestru should join error path with one returned from from Nestru.Decoder.from_map_hint/3" do
+  test "Nestru should join error path with one returned from Nestru.Decoder.from_map_hint/3" do
     map = %{items: [%{id: "2"}]}
 
     assert {:error, %{path: [:items, 0, :id, :some, :subpath]}} =
@@ -82,5 +82,27 @@ defmodule NestruErrorPathTest do
                  fn ->
                    Nestru.from_map!(map, ErroredItemsBook)
                  end
+  end
+
+  test "Nestru should raise error getting path with not atom or string from Nestru.Decoder.from_map_hint/3" do
+    map = %{items: [%{id: "3"}]}
+
+    expected_error =
+      Regex.compile!(
+        Regex.escape("""
+        Error path can contain only not nil atoms, binaries or integers. \
+        Error is {:error, %{message: \"failure message\", path: [:some, nil]}}, \
+        received from function #Function<\
+        """) <>
+          ".*" <> Regex.escape("/1 in Nestru.Decoder.OrderItemFunctionError.from_map_hint/3>.")
+      )
+
+    assert_raise RuntimeError, expected_error, fn ->
+      Nestru.from_map(map, ErroredItemsBook)
+    end
+
+    assert_raise RuntimeError, expected_error, fn ->
+      Nestru.from_map!(map, ErroredItemsBook)
+    end
   end
 end

@@ -23,6 +23,7 @@ defmodule OrderItemFunctionError do
          id: fn
            "1" -> {:error, "something went wrong"}
            "2" -> {:error, %{message: "another thing went wrong", path: [:some, :subpath]}}
+           "3" -> {:error, %{message: "failure message", path: [:some, nil]}}
          end
        }}
     end

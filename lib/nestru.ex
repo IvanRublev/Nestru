@@ -33,7 +33,7 @@ defmodule Nestru do
         {:ok, struct(struct_module, map)}
 
       {:error, %{} = map} ->
-        {:error, format_get_in_keys(map)}
+        {:error, format_paths(map)}
 
       {:invalid_hint_shape, %{message: {struct_module, value}} = error_map} ->
         {:error, %{error_map | message: invalid_hint_shape(struct_module, value)}}
@@ -165,8 +165,8 @@ defmodule Nestru do
 
       fields =
         Enum.reduce(as_is_keys, %{}, fn key, taken_map ->
-          if has_field_value?(map, key) do
-            value = get_field_value(map, key)
+          if has_key?(map, key) do
+            value = get(map, key)
             Map.put(taken_map, key, value)
           else
             taken_map
@@ -202,18 +202,19 @@ defmodule Nestru do
 
   defp shape_fields_recursively(error_mode, {key, fun, iterator}, map, target_map)
        when is_function(fun) do
-    map_value = get_field_value(map, key)
+    map_value = get(map, key)
 
     case fun.(map_value) do
       {:ok, updated_value} ->
         target_map = Map.put(target_map, key, updated_value)
         shape_fields_recursively(error_mode, :maps.next(iterator), map, target_map)
 
-      {:error, %{message: _, path: _} = error_map} ->
-        {:error, insert_to_path(error_map, key)}
+      {:error, %{message: _, path: path} = error_map} = error ->
+        validate_path!(path, error, fun)
+        {:error, insert_to_path(error_map, key, map)}
 
       {:error, message} ->
-        {:error, insert_to_path(%{message: message}, key)}
+        {:error, insert_to_path(%{message: message}, key, map)}
 
       value ->
         {:unexpected_item_function_return, key, fun, value}
@@ -224,7 +225,7 @@ defmodule Nestru do
        when is_atom(module) do
     if function_exported?(module, :__struct__, 0) do
       result =
-        case get_field_value(map, key) do
+        case get(map, key) do
           [_ | _] ->
             {:unexpected_atom_for_item_with_list, key, module}
 
@@ -232,7 +233,7 @@ defmodule Nestru do
             {:ok, nil}
 
           map_value ->
-            shape_nested_struct(error_mode, key, map_value, module)
+            shape_nested_struct(error_mode, map, key, map_value, module)
         end
 
       case result do
@@ -253,7 +254,7 @@ defmodule Nestru do
     {:unexpected_item_value, key, value}
   end
 
-  defp shape_nested_struct(error_mode, key, map_value, module) do
+  defp shape_nested_struct(error_mode, map, key, map_value, module) do
     shaped_value =
       if error_mode == :raise do
         from_map!(map_value, module)
@@ -269,26 +270,42 @@ defmodule Nestru do
         ok
 
       {:error, error_map} ->
-        {:error, insert_to_path(error_map, key)}
+        {:error, insert_to_path(error_map, key, map)}
     end
   end
 
-  defp insert_to_path(error_map, key) do
+  defp validate_path!(path, error, fun) do
+    unless Enum.all?(path, &(not is_nil(&1) and (is_atom(&1) or is_binary(&1) or is_number(&1)))) do
+      raise """
+      Error path can contain only not nil atoms, binaries or integers. \
+      Error is #{inspect(error)}, received from function #{inspect(fun)}.\
+      """
+    end
+  end
+
+  defp insert_to_path(error_map, key, map_value) do
+    key = resolve_key(map_value, key)
+    insert_to_path(error_map, key)
+  end
+
+  defp insert_to_path(error_map, key_or_idx) do
     path =
       Enum.concat([
-        List.wrap(key),
+        List.wrap(key_or_idx),
         Map.get(error_map, :path, [])
       ])
 
     Map.put(error_map, :path, path)
   end
 
-  defp has_field_value?(map, key) do
-    Map.has_key?(map, to_string(key)) or Map.has_key?(map, key)
+  defp resolve_key(map, key) do
+    existing_key(map, key) ||
+      (is_binary(key) && existing_key(map, String.to_existing_atom(key))) ||
+      (is_atom(key) && existing_key(map, to_string(key))) || key
   end
 
-  defp get_field_value(map, key) do
-    Map.get(map, to_string(key)) || Map.get(map, key)
+  defp existing_key(map, key) do
+    if Map.has_key?(map, key), do: key
   end
 
   defp invalid_gather_fields_shape(struct_module, value) do
@@ -332,6 +349,34 @@ defmodule Nestru do
   end
 
   @doc """
+  Returns whether the given key exists in the given map as a binary or as an atom.
+  """
+  def has_key?(map, key) when is_binary(key) do
+    Map.has_key?(map, key) or Map.has_key?(map, String.to_existing_atom(key))
+  end
+
+  def has_key?(map, key) when is_atom(key) do
+    Map.has_key?(map, key) or Map.has_key?(map, to_string(key))
+  end
+
+  @doc """
+  Gets the value for a specific key in map. Lookups a binary or an atom key.
+
+  If key is present in map then its value value is returned. Otherwise, default is returned.
+
+  If default is not provided, nil is used.
+  """
+  def get(map, key, default \\ nil)
+
+  def get(map, key, default) when is_binary(key) do
+    Map.get(map, key, Map.get(map, String.to_existing_atom(key), default))
+  end
+
+  def get(map, key, default) when is_atom(key) do
+    Map.get(map, key, Map.get(map, to_string(key), default))
+  end
+
+  @doc """
   Creates a map from the given nested struct.
 
   Casts each field's value to a map recursively, whether it is a struct or
@@ -351,7 +396,7 @@ defmodule Nestru do
         ok
 
       {:error, map} ->
-        {:error, format_get_in_keys(map)}
+        {:error, format_paths(map)}
     end
   end
 
@@ -443,7 +488,7 @@ defmodule Nestru do
     """
   end
 
-  defp format_get_in_keys(map) do
+  defp format_paths(map) do
     keys =
       map
       |> Map.get(:path, [])
@@ -452,9 +497,8 @@ defmodule Nestru do
     Map.put(map, :get_in_keys, keys)
   end
 
-  defp to_access_fun(key) when is_atom(key), do: Access.key!(key)
+  defp to_access_fun(key) when is_atom(key) or is_binary(key), do: Access.key!(key)
   defp to_access_fun(key) when is_integer(key), do: Access.at!(key)
-  defp to_access_fun(key) when is_function(key), do: key
 
   defp format_raise_message(object, map) do
     keys =
@@ -470,9 +514,11 @@ defmodule Nestru do
     """
   end
 
-  defp to_access_string(key) when is_atom(key), do: "Access.key!(#{inspect(key)})"
-  defp to_access_string(key) when is_integer(key), do: "Access.at!(#{key})"
-  defp to_access_string(key) when is_binary(key), do: key
+  defp to_access_string(key) when is_atom(key) or is_binary(key),
+    do: "Access.key!(#{inspect(key)})"
+
+  defp to_access_string(key) when is_integer(key),
+    do: "Access.at!(#{key})"
 
   defp stringify(value) when is_binary(value), do: value
   defp stringify(value), do: inspect(value)
