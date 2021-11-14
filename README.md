@@ -6,6 +6,8 @@
 
 > Full documentation is on [hexdocs.pm](https://hexdocs.pm/nestru/)
 
+> JSON parsing example is in [contentful-elixir-parse-example-nestru-domo](https://github.com/IvanRublev/contentful-elixir-parse-example-nestru-domo) repo.
+
 [//]: # (Documentation)
 
 A library to serialize between maps and nested structs.
