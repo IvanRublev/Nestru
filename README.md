@@ -80,9 +80,9 @@ map = %{
 
 ```output
 {:ok,
-  %OrderA{
+  %Order{
     id: "A548",
-    items: [%LineItemA{amount: 150}, %LineItemA{amount: 350}],
+    items: [%LineItem{amount: 150}, %LineItem{amount: 350}],
     total: %Total{sum: 500}
   }}
 ```
