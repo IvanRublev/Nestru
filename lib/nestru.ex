@@ -504,8 +504,7 @@ defmodule Nestru do
     keys =
       map
       |> Map.get(:path, [])
-      |> Enum.map(&to_access_string/1)
-      |> Enum.join(", ")
+      |> Enum.map_join(", ", &to_access_string/1)
 
     """
     #{stringify(map.message)}
