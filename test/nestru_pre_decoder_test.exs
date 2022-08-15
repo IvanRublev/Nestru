@@ -10,8 +10,18 @@ defmodule NestruPreDecoderTest do
         gather_max_total_custom_key: 50_000
       }
 
-      assert {:ok, %Order{max_total: 500.00}} = Nestru.from_map(map, Order)
-      assert %Order{max_total: 500.00} = Nestru.from_map!(map, Order)
+      assert {:ok, %Order{max_total: 500.00}} = Nestru.decode_from_map(map, Order)
+      assert %Order{max_total: 500.00} = Nestru.decode_from_map!(map, Order)
+    end
+
+    test "configure fields gathering in deriving function" do
+      map = %{
+        "totalSum" => 125.0,
+        "atom_key" => 5.0
+      }
+
+      assert {:ok, %Invoice{total_sum: 125.00, key: 5.0}} = Nestru.decode_from_map(map, Invoice)
+      assert %Invoice{total_sum: 125.00, key: 5.0} = Nestru.decode_from_map!(map, Invoice)
     end
 
     test "bypass error received" do
@@ -19,10 +29,10 @@ defmodule NestruPreDecoderTest do
 
       expected_error = "gather failed"
 
-      assert {:error, %{message: ^expected_error}} = Nestru.from_map(map, Order)
+      assert {:error, %{message: ^expected_error}} = Nestru.decode_from_map(map, Order)
 
       assert_raise RuntimeError, regex_substring(expected_error), fn ->
-        Nestru.from_map!(map, Order)
+        Nestru.decode_from_map!(map, Order)
       end
     end
 
@@ -34,10 +44,10 @@ defmodule NestruPreDecoderTest do
       function implemented for Order, received :not_a_tuple instead.\
       """
 
-      assert {:error, %{message: ^expected_error}} = Nestru.from_map(map, Order)
+      assert {:error, %{message: ^expected_error}} = Nestru.decode_from_map(map, Order)
 
       assert_raise RuntimeError, regex_substring(expected_error), fn ->
-        Nestru.from_map!(map, Order)
+        Nestru.decode_from_map!(map, Order)
       end
     end
   end

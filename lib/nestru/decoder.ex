@@ -6,7 +6,7 @@ defprotocol Nestru.Decoder do
 
   The first argument is an empty struct value adopting the protocol.
 
-  The second argument is the context value given to the `Nestru.from_map/3` function call.
+  The second argument is the context value given to the `Nestru.decode_from_map/3` function call.
 
   The third argument is a map to be decoded into the struct.
   The map is useful to generate a hint for fields that have a dynamic struct type.
@@ -17,6 +17,10 @@ defprotocol Nestru.Decoder do
     * A module's atom specifies that the appropriate field's value should
       be decoded as a nested struct defined in the module.
       Each field of the nested struct will be decoded recursively.
+
+    * A one element list with module's atom specifies that the appropriate
+      field's value should be decoded as a list of struct defined in the module.
+      It's equivalent of returning `&Nestru.decode_from_list_of_maps(&1, module)`.
 
     * An anonymous function with arity 1 specifies that the appropriate
       field's value should be returned from the function.
@@ -45,27 +49,26 @@ defprotocol Nestru.Decoder do
       defmodule FruitBox do
         defstruct [:items]
 
-        # Give a function to decode the list field as a hint
         defimpl Nestru.Decoder do
           def from_map_hint(_value, _context, map) do
-            {:ok, %{items: &Nestru.from_list_of_maps(&1, FruitBox.Fruit)}}
+            # Give a function to decode the list field as a hint
+            {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, FruitBox.Fruit)}}
           end
         end
       end
 
-      # Generate implementation by deriving the protocol
       def FruitBox.Fruit do
-        @derive {
-          Nestru.Decoder,
-          %{
-            vitamins: &__MODULE__.decode_vitamins/1,
-            energy: FruitEnergy
-          }
-        }
-
-        def decode_vitamins(value), do: Nestru.from_list_of_maps(value, Vitamin)
+        # Give a hint in a compact form with deriving the protocol
+        @derive {Nestru.Decoder, %{vitamins: [Vitamin], energy: FruitEnergy}}
 
         defstruct [:vitamins, :energy]
+      end
+
+      def FruitEnergy do
+        # Derive the default implementation
+        @derive Nestru.Decoder
+
+        defstruct [:value]
       end
   """
   def from_map_hint(value, context, map)

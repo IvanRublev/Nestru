@@ -16,6 +16,10 @@ defmodule NestruMapFunTest do
       refute Nestru.has_key?(%{}, "key")
     end
 
+    test "returns false given a binary key that is mapping to nonexisting atom" do
+      refute Nestru.has_key?(%{}, "non_existing_atom_name")
+    end
+
     test "raises BadMap error giving not a map" do
       assert_raise BadMapError, regex_substring("expected a map, got: nil"), fn ->
         Nestru.has_key?(nil, :key)
@@ -40,6 +44,10 @@ defmodule NestruMapFunTest do
       assert Nestru.get(%{"key" => :string}, "key")
       assert Nestru.get(%{}, "key") == nil
       assert Nestru.get(%{}, "key", :none) == :none
+    end
+
+    test "returns nil given a binary key that is mapping to nonexisting atom" do
+      refute Nestru.get(%{}, "non_existing_atom_name")
     end
 
     test "raises BadMap error giving not a map" do

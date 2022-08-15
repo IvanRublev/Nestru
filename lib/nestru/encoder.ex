@@ -19,23 +19,23 @@ defprotocol Nestru.Encoder do
 
   Any other return value raises an error.
   """
-  def to_map(value)
+  def encode_to_map(value)
 end
 
 defimpl Nestru.Encoder, for: Any do
   defmacro __deriving__(module, _struct, _opts) do
     quote do
       defimpl Nestru.Encoder, for: unquote(module) do
-        def to_map(value), do: {:ok, Map.from_struct(value)}
+        def encode_to_map(value), do: {:ok, Map.from_struct(value)}
       end
     end
   end
 
-  def to_map(%module{}) do
+  def encode_to_map(%module{}) do
     raise "Please, @derive Nestru.Encoder protocol before defstruct/1 call in #{inspect(module)} or defimpl the protocol in the module explicitly to support encoding into map."
   end
 
-  def to_map(value) do
+  def encode_to_map(value) do
     {:ok, value}
   end
 end

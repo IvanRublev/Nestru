@@ -11,7 +11,7 @@ defmodule OrderInternalError do
   end
 
   defimpl Nestru.Encoder do
-    def to_map(_struct) do
+    def encode_to_map(_struct) do
       {:error, "internal error"}
     end
   end

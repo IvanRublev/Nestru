@@ -5,7 +5,7 @@ defmodule ErroredItemsBook do
 
   defimpl Nestru.Decoder do
     def from_map_hint(_value, _context, _map) do
-      {:ok, %{items: &Nestru.from_list_of_maps(&1, OrderItemFunctionError)}}
+      {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, OrderItemFunctionError)}}
     end
   end
 end

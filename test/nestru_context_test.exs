@@ -10,8 +10,8 @@ defmodule NestruContextTest do
 
       context = 15_000
 
-      assert {:ok, %Order{max_total: 150.00}} = Nestru.from_map(map, Order, context)
-      assert %Order{max_total: 150.00} = Nestru.from_map!(map, Order, context)
+      assert {:ok, %Order{max_total: 150.00}} = Nestru.decode_from_map(map, Order, context)
+      assert %Order{max_total: 150.00} = Nestru.decode_from_map!(map, Order, context)
     end
 
     test "pass the context value to Decoder.from_map_hint/1" do
@@ -22,8 +22,8 @@ defmodule NestruContextTest do
 
       context = [override_max_total: 250]
 
-      assert {:ok, %Order{max_total: 250}} = Nestru.from_map(map, Order, context)
-      assert %Order{max_total: 250} = Nestru.from_map!(map, Order, context)
+      assert {:ok, %Order{max_total: 250}} = Nestru.decode_from_map(map, Order, context)
+      assert %Order{max_total: 250} = Nestru.decode_from_map!(map, Order, context)
     end
 
     test "pass the context decoding a list of maps" do
@@ -40,13 +40,13 @@ defmodule NestruContextTest do
                 %Order{max_total: 150.00},
                 %Order{max_total: 150.00},
                 %Order{max_total: 150.00}
-              ]} = Nestru.from_list_of_maps(list, Order, context)
+              ]} = Nestru.decode_from_list_of_maps(list, Order, context)
 
       assert [
                %Order{max_total: 150.00},
                %Order{max_total: 150.00},
                %Order{max_total: 150.00}
-             ] = Nestru.from_list_of_maps!(list, [Order, Order, Order], context)
+             ] = Nestru.decode_from_list_of_maps!(list, [Order, Order, Order], context)
     end
   end
 end

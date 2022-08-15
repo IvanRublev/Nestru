@@ -1,12 +1,12 @@
 defmodule Nestru do
   @moduledoc "README.md"
              |> File.read!()
-             |> String.split("[//]: # (Documentation)\n")
+             |> String.split("<!-- Documentation -->\n")
              |> Enum.at(1)
              |> String.trim("\n")
 
   @doc """
-  Creates a nested struct from the given map.
+  Decodes a map into the given struct.
 
   The first argument is a map having key-value pairs. Supports both string
   and atom keys in the map.
@@ -22,9 +22,9 @@ defmodule Nestru do
   Function calls `struct/2` to build the struct's value.
   Keys in the map that don't exist in the struct are automatically discarded.
   """
-  def from_map(map, struct_module, context \\ [])
+  def decode_from_map(map, struct_module, context \\ [])
 
-  def from_map(%{} = map, struct_module, context) do
+  def decode_from_map(%{} = map, struct_module, context) do
     case prepare_map(:warn, map, struct_module, context) do
       {:ok, nil} ->
         {:ok, nil}
@@ -52,19 +52,19 @@ defmodule Nestru do
     end
   end
 
-  def from_map(map, _struct_module, _context) do
+  def decode_from_map(map, _struct_module, _context) do
     map
   end
 
   @doc """
-  Similar to `from_map/3` but checks if enforced struct's fields keys exist
+  Similar to `decode_from_map/3` but checks if enforced struct's fields keys exist
   in the given map.
 
   Returns a struct or raises an error.
   """
-  def from_map!(map, struct_module, context \\ [])
+  def decode_from_map!(map, struct_module, context \\ [])
 
-  def from_map!(%{} = map, struct_module, context) do
+  def decode_from_map!(%{} = map, struct_module, context) do
     case prepare_map(:raise, map, struct_module, context) do
       {:ok, nil} ->
         nil
@@ -92,7 +92,7 @@ defmodule Nestru do
     end
   end
 
-  def from_map!(map, struct_module, _context) do
+  def decode_from_map!(map, struct_module, _context) do
     raise """
     Can't shape #{inspect(struct_module)} because the given value \
     is not a map but #{inspect(map)}.\
@@ -200,6 +200,16 @@ defmodule Nestru do
     {:ok, target_map}
   end
 
+  defp shape_fields_recursively(error_mode, {key, [module], iterator}, map, target_map)
+       when is_atom(module) do
+    shape_fields_recursively(
+      error_mode,
+      {key, &__MODULE__.decode_from_list_of_maps(&1, module), iterator},
+      map,
+      target_map
+    )
+  end
+
   defp shape_fields_recursively(error_mode, {key, fun, iterator}, map, target_map)
        when is_function(fun) do
     map_value = get(map, key)
@@ -223,7 +233,7 @@ defmodule Nestru do
 
   defp shape_fields_recursively(error_mode, {key, module, iterator}, map, target_map)
        when is_atom(module) do
-    if function_exported?(module, :__struct__, 0) do
+    if Code.ensure_loaded?(module) and function_exported?(module, :__struct__, 0) do
       result =
         case get(map, key) do
           [_ | _] ->
@@ -257,9 +267,9 @@ defmodule Nestru do
   defp shape_nested_struct(error_mode, map, key, map_value, module) do
     shaped_value =
       if error_mode == :raise do
-        from_map!(map_value, module)
+        decode_from_map!(map_value, module)
       else
-        from_map(map_value, module)
+        decode_from_map(map_value, module)
       end
 
     case shaped_value do
@@ -300,8 +310,16 @@ defmodule Nestru do
 
   defp resolve_key(map, key) do
     existing_key(map, key) ||
-      (is_binary(key) && existing_key(map, String.to_existing_atom(key))) ||
+      (is_binary(key) && apply_atom_key(key, nil, &existing_key(map, &1))) ||
       (is_atom(key) && existing_key(map, to_string(key))) || key
+  end
+
+  defp apply_atom_key(string, default, fun) do
+    try do
+      fun.(String.to_existing_atom(string))
+    rescue
+      ArgumentError -> default
+    end
   end
 
   defp existing_key(map, key) do
@@ -333,7 +351,7 @@ defmodule Nestru do
 
   defp invalid_item_value(struct_module, key, value) do
     """
-    Expected a struct's module atom or a function value for #{inspect(key)} key received \
+    Expected a struct's module atom, [struct_module_atom], or a function value for #{inspect(key)} key received \
     from Nestru.Decoder.from_map_hint/3 function implemented for #{inspect(struct_module)}, \
     received #{inspect(value)} instead.\
     """
@@ -343,7 +361,7 @@ defmodule Nestru do
     """
     Unexpected #{inspect(value)} value received for #{inspect(key)} key \
     from Nestru.Decoder.from_map_hint/3 function implemented for #{inspect(struct_module)}. \
-    You can return &Nestru.from_list_of_maps(&1, #{inspect(value)}) as a hint \
+    You can return &Nestru.decode_from_list_of_maps(&1, #{inspect(value)}) as a hint \
     for list decoding.\
     """
   end
@@ -352,7 +370,7 @@ defmodule Nestru do
   Returns whether the given key exists in the given map as a binary or as an atom.
   """
   def has_key?(map, key) when is_binary(key) do
-    Map.has_key?(map, key) or Map.has_key?(map, String.to_existing_atom(key))
+    Map.has_key?(map, key) or apply_atom_key(key, false, &Map.has_key?(map, &1))
   end
 
   def has_key?(map, key) when is_atom(key) do
@@ -369,7 +387,7 @@ defmodule Nestru do
   def get(map, key, default \\ nil)
 
   def get(map, key, default) when is_binary(key) do
-    Map.get(map, key, Map.get(map, String.to_existing_atom(key), default))
+    Map.get(map, key, apply_atom_key(key, default, &Map.get(map, &1, default)))
   end
 
   def get(map, key, default) when is_atom(key) do
@@ -377,7 +395,7 @@ defmodule Nestru do
   end
 
   @doc """
-  Creates a map from the given nested struct.
+  Encodes the given struct into a map.
 
   Casts each field's value to a map recursively, whether it is a struct or
   a list of structs.
@@ -387,7 +405,7 @@ defmodule Nestru do
   additional type information for the field that can have a value of various
   struct types.
   """
-  def to_map(struct) do
+  def encode_to_map(struct) do
     case cast_to_map(struct) do
       {:invalid_hint_shape, %{message: {struct_module, value}} = error_map} ->
         {:error, %{error_map | message: invalid_to_map_value_message(struct_module, value)}}
@@ -401,11 +419,11 @@ defmodule Nestru do
   end
 
   @doc """
-  Similar to `to_map/1`.
+  Similar to `encode_to_map/1`.
 
   Returns a map or raises an error.
   """
-  def to_map!(struct) do
+  def encode_to_map!(struct) do
     case cast_to_map(struct) do
       {:ok, map} ->
         map
@@ -421,7 +439,7 @@ defmodule Nestru do
   defp cast_to_map(struct, kvi \\ nil, acc \\ {[], %{}})
 
   defp cast_to_map(%module{} = struct, _kvi, {path, _target_map} = acc) do
-    case struct |> Nestru.Encoder.to_map() |> validate_hint(module) do
+    case struct |> Nestru.Encoder.encode_to_map() |> validate_hint(module) do
       {:ok, map} -> cast_to_map(map, nil, acc)
       {tag, %{} = map} -> {tag, Map.put(map, :path, path)}
     end
@@ -483,7 +501,7 @@ defmodule Nestru do
 
   defp invalid_to_map_value_message(struct_module, value) do
     """
-    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.to_map/1 \
+    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.encode_to_map/1 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
@@ -523,52 +541,52 @@ defmodule Nestru do
   defp stringify(value), do: inspect(value)
 
   @doc """
-  Creates a list of nested structs from the given list of maps.
+  Decodes a list of maps into the list of the given struct.
 
   The first argument is a list of maps.
 
   If the second argument is a struct's module atom, then the function calls
-  the `from_map/3` on each input list item.
+  the `decode_from_map/3` on each input list item.
 
   If the second argument is a list of struct module atoms, the function
-  calls the `from_map/3` function on each input list item with the module atom
+  calls the `decode_from_map/3` function on each input list item with the module atom
   taken at the same index of the second list.
   In this case, both arguments should be of equal length.
 
   The third argument is a context value to be passed to implemented
   functions of `Nestru.PreDecoder` and `Nestru.Decoder` protocols.
 
-  The function returns a list of structs or the first error from `from_map/3`
+  The function returns a list of structs or the first error from `decode_from_map/3`
   function.
   """
-  def from_list_of_maps(list, struct_atoms, context \\ [])
+  def decode_from_list_of_maps(list, struct_atoms, context \\ [])
 
-  def from_list_of_maps([_ | _] = list, struct_atoms, context) do
+  def decode_from_list_of_maps([_ | _] = list, struct_atoms, context) do
     list
     |> reduce_via_from_map(struct_atoms, context)
     |> maybe_ok_reverse()
   end
 
-  def from_list_of_maps(list, _struct_atoms, _context) do
+  def decode_from_list_of_maps(list, _struct_atoms, _context) do
     {:ok, list}
   end
 
   @doc """
-  Similar to `from_list_of_maps/2` but checks if enforced struct's fields keys
+  Similar to `decode_from_list_of_maps/2` but checks if enforced struct's fields keys
   exist in the given maps.
 
   Returns a struct or raises an error.
   """
-  def from_list_of_maps!(list, struct_atoms, context \\ [])
+  def decode_from_list_of_maps!(list, struct_atoms, context \\ [])
 
-  def from_list_of_maps!([_ | _] = list, struct_atoms, context) do
+  def decode_from_list_of_maps!([_ | _] = list, struct_atoms, context) do
     case list |> reduce_via_from_map(struct_atoms, context) |> maybe_ok_reverse() do
       {:ok, list} -> list
       {:error, %{message: message}} -> raise message
     end
   end
 
-  def from_list_of_maps!(list, _struct_atoms, _context) do
+  def decode_from_list_of_maps!(list, _struct_atoms, _context) do
     list
   end
 
@@ -579,7 +597,7 @@ defmodule Nestru do
     |> Enum.reduce_while([], fn {item, idx}, acc ->
       struct_module = Enum.at(struct_atoms, idx)
 
-      case from_map(item, struct_module, context) do
+      case decode_from_map(item, struct_module, context) do
         {:ok, casted_item} ->
           {:cont, [casted_item | acc]}
 
@@ -593,7 +611,7 @@ defmodule Nestru do
     list
     |> Enum.with_index()
     |> Enum.reduce_while([], fn {item, idx}, acc ->
-      case from_map(item, struct_atoms, context) do
+      case decode_from_map(item, struct_atoms, context) do
         {:ok, casted_item} ->
           {:cont, [casted_item | acc]}
 

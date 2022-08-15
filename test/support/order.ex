@@ -5,6 +5,16 @@ defmodule Leaf do
   defstruct [:leaf, :value]
 end
 
+defmodule Invoice do
+  @moduledoc false
+
+  @derive [
+    Nestru.Decoder,
+    {Nestru.PreDecoder, %{"totalSum" => :total_sum, atom_key: :key}}
+  ]
+  defstruct [:total_sum, :key]
+end
+
 defmodule OrdersBook do
   @moduledoc false
 
@@ -18,7 +28,8 @@ defmodule OrdersBook do
         # wrong
         [_] -> {:ok, %{orders: Order}}
         # correct
-        _ -> {:ok, %{orders: &Nestru.from_list_of_maps(&1, Order)}}
+        [_, _] -> {:ok, %{orders: &Nestru.decode_from_list_of_maps(&1, Order)}}
+        _ -> {:ok, %{orders: [Order]}}
       end
     end
   end
@@ -67,7 +78,7 @@ defmodule Order do
   end
 
   defimpl Nestru.Encoder do
-    def to_map(struct) do
+    def encode_to_map(struct) do
       map = Map.from_struct(struct)
 
       {:ok,
@@ -97,7 +108,7 @@ defmodule LineItemHolder do
     }
   }
 
-  def decode_items(value), do: Nestru.from_list_of_maps(value, LineItem)
+  def decode_items(value), do: Nestru.decode_from_list_of_maps(value, LineItem)
 
   defstruct [:items, :totals]
 end
@@ -119,7 +130,7 @@ defmodule Totals do
   end
 
   defimpl Nestru.Encoder do
-    def to_map(struct) do
+    def encode_to_map(struct) do
       map = Map.from_struct(struct)
 
       if map.total > 500 do

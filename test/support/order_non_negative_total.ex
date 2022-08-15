@@ -13,7 +13,7 @@ defmodule OrderNonNegativeTotal do
   end
 
   defimpl Nestru.Encoder do
-    def to_map(struct) do
+    def encode_to_map(struct) do
       map = Map.from_struct(struct)
 
       {:ok,

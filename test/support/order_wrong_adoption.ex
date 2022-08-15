@@ -14,7 +14,7 @@ defmodule OrderWrongAdoption do
   end
 
   defimpl Nestru.Encoder do
-    def to_map(struct) do
+    def encode_to_map(struct) do
       case struct.id do
         1 -> :nan
         2 -> :error
