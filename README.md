@@ -363,6 +363,10 @@ the struct's field values match its `t()` type and associated preconditions.
 
 ## Changelog
 
+### 0.2.1
+
+* Fix `decode_from_map(!)/2/3` to return the error for not a map value.
+
 ### 0.2.0
 
 * Fix to ensure the module is loaded before checking if it's a struct

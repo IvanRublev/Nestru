@@ -52,8 +52,8 @@ defmodule Nestru do
     end
   end
 
-  def decode_from_map(map, _struct_module, _context) do
-    map
+  def decode_from_map(value, struct_module, _context) do
+    {:error, %{message: invalid_map_input(struct_module, value)}}
   end
 
   @doc """
@@ -92,11 +92,8 @@ defmodule Nestru do
     end
   end
 
-  def decode_from_map!(map, struct_module, _context) do
-    raise """
-    Can't shape #{inspect(struct_module)} because the given value \
-    is not a map but #{inspect(map)}.\
-    """
+  def decode_from_map!(value, struct_module, _context) do
+    raise invalid_map_input(struct_module, value)
   end
 
   defp prepare_map(error_mode, map, struct_module, context) do
@@ -324,6 +321,13 @@ defmodule Nestru do
 
   defp existing_key(map, key) do
     if Map.has_key?(map, key), do: key
+  end
+
+  defp invalid_map_input(struct_module, value) do
+    """
+    Expected a map value received #{inspect(value)} instead. \
+    Can't convert it to a #{inspect(struct_module)} struct.\
+    """
   end
 
   defp invalid_gather_fields_shape(struct_module, value) do

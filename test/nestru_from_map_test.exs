@@ -203,16 +203,6 @@ defmodule NestruFromMapTest do
       assert Nestru.decode_from_map!(map, OrderNonNegativeTotal) == nil
     end
 
-    test "raise an error if the map given to Nestru.decode_from_map!/2 is not of map shape" do
-      assert_raise RuntimeError, ~r/Can't shape.*not a map/, fn ->
-        Nestru.decode_from_map!(nil, OrderWrongMap)
-      end
-    end
-
-    test "return first input value given to Nestru.from_map_hint/3 if it's not a map" do
-      assert Nestru.decode_from_map(nil, OrderWrongMap) == nil
-    end
-
     test "raise a Nestru.decode_from_map! error for key-value pair in map returned from Decoder.from_map_hint/3 that not exists in the decoding struct" do
       map = %{
         id: "1",
@@ -241,7 +231,34 @@ defmodule NestruFromMapTest do
              """
     end
 
-    test "return the struct or error missing required root field in a map" do
+    test "return error decoding not a map" do
+      map = 1
+
+      expected_message =
+        "Expected a map value received 1 instead. Can't convert it to a Leaf struct."
+
+      assert {:error, %{message: ^expected_message}} = Nestru.decode_from_map(map, Leaf)
+
+      assert_raise RuntimeError, regex_substring(expected_message), fn ->
+        Nestru.decode_from_map!(map, Leaf)
+      end
+    end
+
+    test "return error having a non map value for a field with a struct hint" do
+      map = %{leaf: :nan}
+
+      expected_message =
+        "Expected a map value received :nan instead. Can't convert it to a Leaf struct."
+
+      assert {:error, %{message: ^expected_message, path: [:leaf]}} =
+               Nestru.decode_from_map(map, Leaf)
+
+      assert_raise RuntimeError, regex_substring(expected_message), fn ->
+        Nestru.decode_from_map!(map, Leaf)
+      end
+    end
+
+    test "return the struct or raise error missing enforced root field in a map" do
       map = %{
         max_total: 50_000
       }
@@ -250,7 +267,7 @@ defmodule NestruFromMapTest do
       assert_raise ArgumentError, ~r/[:id]/, fn -> Nestru.decode_from_map!(map, Order) end
     end
 
-    test "return the struct or error missing required nested field in a map" do
+    test "return the struct or raise error missing enforced nested field in a map" do
       map = %{
         id: "123785-558",
         totals: %{sum: 345.00, discount: 20.00}
