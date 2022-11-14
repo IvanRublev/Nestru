@@ -42,7 +42,7 @@ defmodule Order do
   defstruct [:id, :max_total, :items, :totals, :empty_totals, :maybe_totals]
 
   defimpl Nestru.PreDecoder do
-    def gather_fields_map(_value, context, map) do
+    def gather_fields_from_map(_value, context, map) do
       cond do
         Map.has_key?(map, :gather_max_total_custom_key) ->
           {:ok, Map.put(map, :max_total, map.gather_max_total_custom_key)}
@@ -78,14 +78,12 @@ defmodule Order do
   end
 
   defimpl Nestru.Encoder do
-    def encode_to_map(struct) do
-      map = Map.from_struct(struct)
+    def gather_fields_from_struct(struct, :keep_one_field) do
+      {:ok, %{max_total: if(struct.max_total, do: round(struct.max_total * 100))}}
+    end
 
-      {:ok,
-       Map.merge(
-         map,
-         %{max_total: if(struct.max_total, do: round(struct.max_total * 100))}
-       )}
+    def gather_fields_from_struct(struct, _context) do
+      {:ok, Map.from_struct(struct)}
     end
   end
 end
@@ -130,7 +128,7 @@ defmodule Totals do
   end
 
   defimpl Nestru.Encoder do
-    def encode_to_map(struct) do
+    def gather_fields_from_struct(struct, _context) do
       map = Map.from_struct(struct)
 
       if map.total > 500 do

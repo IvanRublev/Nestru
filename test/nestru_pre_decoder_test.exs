@@ -40,7 +40,7 @@ defmodule NestruPreDecoderTest do
       map = %{gather_wrong_return: 50_000}
 
       expected_error = """
-      Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_map/3 \
+      Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_from_map/3 \
       function implemented for Order, received :not_a_tuple instead.\
       """
 

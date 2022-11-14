@@ -1,4 +1,6 @@
 defmodule Nestru do
+  @external_resource "README.md"
+
   @moduledoc "README.md"
              |> File.read!()
              |> String.split("<!-- Documentation -->\n")
@@ -100,18 +102,18 @@ defmodule Nestru do
     struct_value = struct_module.__struct__()
     struct_info = {struct_value, struct_module}
 
-    with {:ok, map} <- gather_fields_map(struct_info, map, context),
+    with {:ok, map} <- gather_fields_from_map(struct_info, map, context),
          {:ok, decode_hint} <- get_decode_hint(struct_info, map, context),
          {:ok, _shaped_fields} = ok <- shape_fields(error_mode, struct_info, decode_hint, map) do
       ok
     end
   end
 
-  defp gather_fields_map(struct_info, map, context) do
+  defp gather_fields_from_map(struct_info, map, context) do
     {struct_value, struct_module} = struct_info
 
     struct_value
-    |> Nestru.PreDecoder.gather_fields_map(context, map)
+    |> Nestru.PreDecoder.gather_fields_from_map(context, map)
     |> validate_fields_map(struct_module)
   end
 
@@ -332,7 +334,7 @@ defmodule Nestru do
 
   defp invalid_gather_fields_shape(struct_module, value) do
     """
-    Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_map/3 \
+    Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_from_map/3 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
@@ -382,7 +384,7 @@ defmodule Nestru do
   end
 
   @doc """
-  Gets the value for a specific key in map. Lookups a binary or an atom key.
+  Gets the value for a specific key in map. Lookups a binary then an atom key.
 
   If key is present in map then its value value is returned. Otherwise, default is returned.
 
@@ -401,16 +403,23 @@ defmodule Nestru do
   @doc """
   Encodes the given struct into a map.
 
-  Casts each field's value to a map recursively, whether it is a struct or
+  The first argument is a struct value to be encoded into map.
+
+  Encodes each field's value recursively when it is a struct or
   a list of structs.
 
-  To give a hint to the function of how to generate a map, implement
-  `Nestru.Encoder` protocol for the struct. That can be used to keep
-  additional type information for the field that can have a value of various
-  struct types.
+  The second argument is a context to be passed to `Nestru.Encoder` protocol
+  function.
+
+  To insert additional fields or rename or drop existing ones before encoding
+  into map, implement `Nestru.Encoder` protocol for the struct.
+  That can be used to keep additional type information for the field that can
+  have a value of various value types.
   """
-  def encode_to_map(struct) do
-    case cast_to_map(struct) do
+  def encode_to_map(struct, context \\ nil)
+
+  def encode_to_map(%_{} = struct, context) do
+    case cast_to_map(struct, context) do
       {:invalid_hint_shape, %{message: {struct_module, value}} = error_map} ->
         {:error, %{error_map | message: invalid_to_map_value_message(struct_module, value)}}
 
@@ -422,13 +431,19 @@ defmodule Nestru do
     end
   end
 
+  def encode_to_map(value, _context) do
+    raise expected_struct_value("encode_to_map/1", value, "encode_to_list_of_maps/1")
+  end
+
   @doc """
   Similar to `encode_to_map/1`.
 
   Returns a map or raises an error.
   """
-  def encode_to_map!(struct) do
-    case cast_to_map(struct) do
+  def encode_to_map!(struct, context \\ nil)
+
+  def encode_to_map!(%_{} = struct, context) do
+    case cast_to_map(struct, context) do
       {:ok, map} ->
         map
 
@@ -440,51 +455,55 @@ defmodule Nestru do
     end
   end
 
-  defp cast_to_map(struct, kvi \\ nil, acc \\ {[], %{}})
+  def encode_to_map!(value, _context) do
+    raise expected_struct_value("encode_to_map!/1", value, "encode_to_list_of_maps!/1")
+  end
 
-  defp cast_to_map(%module{} = struct, _kvi, {path, _target_map} = acc) do
-    case struct |> Nestru.Encoder.encode_to_map() |> validate_hint(module) do
-      {:ok, map} -> cast_to_map(map, nil, acc)
+  defp cast_to_map(struct, context, kvi \\ nil, acc \\ {[], %{}})
+
+  defp cast_to_map(%module{} = struct, context, _kvi, {path, _target_map} = acc) do
+    case struct |> Nestru.Encoder.gather_fields_from_struct(context) |> validate_hint(module) do
+      {:ok, map} -> cast_to_map(map, context, nil, acc)
       {tag, %{} = map} -> {tag, Map.put(map, :path, path)}
     end
   end
 
-  defp cast_to_map([_ | _] = list, _kvi, {path, _target_map} = _acc) do
+  defp cast_to_map([_ | _] = list, context, _kvi, {path, _target_map} = _acc) do
     list
-    |> reduce_via_cast_to_map(path)
+    |> reduce_via_cast_to_map(context, path)
     |> maybe_ok_reverse()
   end
 
-  defp cast_to_map(value, _kvi, _acc) when not is_map(value) do
+  defp cast_to_map(value, _context, _kvi, _acc) when not is_map(value) do
     {:ok, value}
   end
 
-  defp cast_to_map(map, nil, acc) do
+  defp cast_to_map(map, context, nil, acc) do
     kvi =
       map
       |> :maps.iterator()
       |> :maps.next()
 
-    cast_to_map(map, kvi, acc)
+    cast_to_map(map, context, kvi, acc)
   end
 
-  defp cast_to_map(_map, :none, {_path, target_map} = _acc) do
+  defp cast_to_map(_map, _context, :none, {_path, target_map} = _acc) do
     {:ok, target_map}
   end
 
-  defp cast_to_map(map, {key, value, iterator}, {path, target_map}) do
-    with {:ok, casted_value} <- cast_to_map(value, nil, {[key | path], %{}}) do
+  defp cast_to_map(map, context, {key, value, iterator}, {path, target_map}) do
+    with {:ok, casted_value} <- cast_to_map(value, context, nil, {[key | path], %{}}) do
       target_map = Map.put(target_map, key, casted_value)
       kvi = :maps.next(iterator)
-      cast_to_map(map, kvi, {path, target_map})
+      cast_to_map(map, context, kvi, {path, target_map})
     end
   end
 
-  defp reduce_via_cast_to_map(list, path) do
+  defp reduce_via_cast_to_map(list, context, path) do
     list
     |> Enum.with_index()
     |> Enum.reduce_while([], fn {item, idx}, acc ->
-      case cast_to_map(item, nil, {[], %{}}) do
+      case cast_to_map(item, context, nil, {[], %{}}) do
         {:ok, casted_item} ->
           {:cont, [casted_item | acc]}
 
@@ -505,9 +524,63 @@ defmodule Nestru do
 
   defp invalid_to_map_value_message(struct_module, value) do
     """
-    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.encode_to_map/1 \
+    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
+  end
+
+  defp expected_struct_value(fun_name, value, list_fun_name) do
+    """
+    #{fun_name} expects a struct as input value, received #{inspect(value)} instead.
+    Use #{list_fun_name} to encode a list of structs to list of maps.\
+    """
+  end
+
+  @doc """
+  Encodes the given list of structs into a list of maps.
+
+  Calls `encode_to_map/2` for each struct in the list. The `Nestru.Encoder`
+  protocol should be implemented for each struct module.
+
+  The function returns a list of maps or the first error from `encode_to_map/2` function.
+  """
+  def encode_to_list_of_maps(list, context \\ nil) do
+    return_value =
+      list
+      |> Enum.with_index()
+      |> Enum.reduce_while([], fn {struct, idx}, acc ->
+        case encode_to_map(struct, context) do
+          {:ok, map} ->
+            {:cont, [map | acc]}
+
+          {:error, map} ->
+            {:halt, {:error, format_paths(insert_to_path(map, idx))}}
+        end
+      end)
+
+    if is_list(return_value) do
+      {:ok, Enum.reverse(return_value)}
+    else
+      return_value
+    end
+  end
+
+  @doc """
+  Similar to `encode_to_list_of_maps/2`
+
+  Returns list of maps or raises an error.
+  """
+  def encode_to_list_of_maps!(list, context \\ nil) do
+    case encode_to_list_of_maps(list, context) do
+      {:ok, list_of_maps} ->
+        list_of_maps
+
+      {:invalid_hint_shape, %{message: {struct_module, value}}} ->
+        raise invalid_to_map_value_message(struct_module, value)
+
+      {:error, error_map} ->
+        raise format_raise_message("list", error_map)
+    end
   end
 
   defp format_paths(map) do
@@ -545,7 +618,7 @@ defmodule Nestru do
   defp stringify(value), do: inspect(value)
 
   @doc """
-  Decodes a list of maps into the list of the given struct.
+  Decodes a list of maps into the list of the given struct values.
 
   The first argument is a list of maps.
 

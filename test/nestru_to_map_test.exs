@@ -4,25 +4,21 @@ defmodule NestruToMapTest do
   import ErrorRegex
 
   describe "For a struct adopting Encoding protocol Nestru should" do
-    test "encode struct to map receiving customized map value from Nestru.Encoder.encode_to_map/1" do
+    test "encode struct to map receiving customized map value from Nestru.Encoder.gather_fields_from_struct/2" do
       struct = %Order{id: "123785-558", max_total: 500.00}
 
-      assert {:ok, %{max_total: 50_000}} = Nestru.encode_to_map(struct)
-      assert %{max_total: 50_000} = Nestru.encode_to_map!(struct)
+      assert {:ok, %{max_total: 50_000}} == Nestru.encode_to_map(struct, :keep_one_field)
+      assert %{max_total: 50_000} == Nestru.encode_to_map!(struct, :keep_one_field)
     end
 
-    test "encode list of structs to map" do
-      list = [
-        %Order{id: "1", max_total: 500.00},
-        %Order{id: "2", max_total: 600.00},
-        %Order{id: "3", max_total: 700.00}
-      ]
+    test "return error giving not a struct value to encode_to_map(!)/1" do
+      assert_raise RuntimeError, regex_substring("expects a struct as input value"), fn ->
+        Nestru.encode_to_map(nil)
+      end
 
-      assert {:ok, [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}]} =
-               Nestru.encode_to_map(list)
-
-      assert [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}] =
-               Nestru.encode_to_map!(list)
+      assert_raise RuntimeError, regex_substring("expects a struct as input value"), fn ->
+        Nestru.encode_to_map!(nil)
+      end
     end
 
     test "encode nested struct to nested map" do
@@ -39,12 +35,7 @@ defmodule NestruToMapTest do
                Nestru.encode_to_map!(struct)
     end
 
-    test "returns input value given to Nestru.encode_to_map(!)/1 if it's not a struct" do
-      assert Nestru.encode_to_map(nil) == {:ok, nil}
-      assert Nestru.encode_to_map!(nil) == nil
-    end
-
-    test "put nil value into the nested map receiving {:ok, nil} from Nestru.Encoder.encode_to_map/1" do
+    test "put nil value into the nested map receiving {:ok, nil} from Nestru.Encoder.gather_fields_from_struct/2" do
       struct = %OrderNonNegativeTotal{max_total: 150}
 
       assert Nestru.encode_to_map(struct) == {:ok, %{max_total: 150}}
@@ -56,11 +47,11 @@ defmodule NestruToMapTest do
       assert Nestru.encode_to_map!(struct) == nil
     end
 
-    test "raise an error receiving not {:ok, nil | map} | {:error, term} from Nestru.Encoder.encode_to_map/1" do
+    test "raise an error receiving not {:ok, nil | map} | {:error, term} from Nestru.Encoder.gather_fields_from_struct/2" do
       struct = %OrderWrongAdoption{id: 1}
 
       expected_message = """
-      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.encode_to_map/1 function \
+      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 function \
       implemented for OrderWrongAdoption, received :nan instead.\
       """
 
@@ -73,7 +64,7 @@ defmodule NestruToMapTest do
       struct = %OrderWrongAdoption{id: 2}
 
       expected_message = """
-      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.encode_to_map/1 function \
+      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 function \
       implemented for OrderWrongAdoption, received :error instead.\
       """
 
@@ -86,7 +77,7 @@ defmodule NestruToMapTest do
       struct = %OrderWrongAdoption{id: 3}
 
       expected_message = """
-      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.encode_to_map/1 function \
+      Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 function \
       implemented for OrderWrongAdoption, received {:ok, :nan} instead.\
       """
 
@@ -97,12 +88,41 @@ defmodule NestruToMapTest do
       end
     end
 
-    test "bypass error returned from Nestru.Encoder.encode_to_map/1" do
+    test "bypass error returned from Nestru.Encoder.gather_fields_from_struct/2" do
       assert {:error, %{message: "internal error"}} =
                Nestru.encode_to_map(%OrderInternalError{id: "1"})
 
       assert_raise RuntimeError, regex_substring("internal error"), fn ->
         Nestru.encode_to_map!(%OrderInternalError{id: "1"})
+      end
+    end
+
+    test "encode list of structs to map" do
+      list = [
+        %Order{id: "1", max_total: 500.00},
+        %Order{id: "2", max_total: 600.00},
+        %Order{id: "3", max_total: 700.00}
+      ]
+
+      assert {:ok, [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}]} =
+               Nestru.encode_to_list_of_maps(list, :keep_one_field)
+
+      assert [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}] =
+               Nestru.encode_to_list_of_maps!(list, :keep_one_field)
+    end
+
+    test "bypass error failing to encode at least one struct to map from the list" do
+      assert {:error, %{message: "internal error"}} =
+               Nestru.encode_to_list_of_maps([
+                 %Order{id: "1", max_total: 500.00},
+                 %OrderInternalError{id: "1"}
+               ])
+
+      assert_raise RuntimeError, regex_substring("internal error"), fn ->
+        Nestru.encode_to_list_of_maps!([
+          %Order{id: "1", max_total: 500.00},
+          %OrderInternalError{id: "1"}
+        ])
       end
     end
   end

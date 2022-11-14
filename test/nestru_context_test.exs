@@ -2,7 +2,7 @@ defmodule NestruContextTest do
   use ExUnit.Case, async: true
 
   describe "Given a context value Nestru should" do
-    test "pass the context value to PreDecoder.gather_fields_map/1" do
+    test "pass the context value to PreDecoder.gather_fields_from_map/1" do
       map = %{
         id: "123785-558",
         context_to_max_total: true

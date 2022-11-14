@@ -22,16 +22,19 @@ A library to serialize between maps and nested structs.
 Turns a map into a nested struct according to hints given to the library.
 And vice versa turns any nested struct into a map.
 
-It works with maps/structs of any shape and complexity. For example, when map
-keys are named differently than struct's fields. Or when fields can hold
-values of various struct types conditionally.
+It works with maps/structs of any shape and level of nesting. Highly configurable
+by implementing `Nestru.Decoder` and `Nestru.Encoder` protocols for structs.
 
-The library's primary purpose is to serialize a JSON map; at the same time,
-the map can be of any origin.
+Useful for translating map keys to struct's fields named differently. 
+Or to specify default values missing in the map and required by struct.
 
-The map can have atom or binary keys. The library takes the binary key first 
-and then the same-named atom key if the binary key is missing during 
-the decoding of the map.
+The library's primary purpose is to serialize a map coming from a JSON payload 
+or an Erlang term; at the same time, the map can be of any origin.
+
+The input map can have atom or binary keys. The library takes the binary key first 
+and then the same-named atom key if the binary key is missing while decoding
+the map.
+The library generates maps with atom keys during the struct encode operation.
 
 ## Tour
 
@@ -73,10 +76,10 @@ map = %{
 
 We get the order as the expected nested struct. Good!
 
-Now we add the `:items` field to `Order` struct to hold a list of `LineItem`s:
+Now we add the `:items` field to `Order1` struct to hold a list of `LineItem`s:
 
 ```elixir
-defmodule Order do
+defmodule Order1 do
   @derive {Nestru.Decoder, %{total: Total}}
   defstruct [:id, :items, :total]
 end
@@ -87,7 +90,7 @@ defmodule LineItem do
 end
 ```
 
-and we decode the `Order` from the nested map like that:
+and we decode the `Order1` from the nested map like that:
 
 ```elixir
 map = %{
@@ -96,19 +99,19 @@ map = %{
   "total" => %{"sum" => 500}
 }
 
-{:ok, model} = Nestru.decode_from_map(map, Order)
+{:ok, model} = Nestru.decode_from_map(map, Order1)
 ```
 ```output
-{:ok, %Order{id: "A548", items: [%{"amount" => 150}, %{"amount" => 350}], total: %Total{sum: 500}}}
+{:ok, %Order1{id: "A548", items: [%{"amount" => 150}, %{"amount" => 350}], total: %Total{sum: 500}}}
 ```
 
-The `:items` field value of the `%Order{}` is still the list of maps 
+The `:items` field value of the `%Order1{}` is still the list of maps 
 and not structs 🤔 This is because `Nestru` has no clue what kind of struct 
 these list items should be. So let's give a hint to `Nestru` on how to decode
 that field:
 
 ```elixir
-defmodule Order do
+defmodule Order2 do
   @derive {Nestru.Decoder, %{total: Total, items: [LineItem]}}
 
   defstruct [:id, :items, :total]
@@ -118,11 +121,11 @@ end
 Let's decode again:
 
 ```elixir
-{:ok, model} = Nestru.decode_from_map(map, Order)
+{:ok, model} = Nestru.decode_from_map(map, Order2)
 ```
 ```output
 {:ok,
- %Order{
+ %Order2{
    id: "A548",
    items: [%LineItem{amount: 150}, %LineItem{amount: 350}],
    total: %Total{sum: 500}
@@ -157,7 +160,7 @@ defmodule House do
   defimpl Nestru.Decoder do
     def from_map_hint(_value, _context, map) do
       if Nestru.has_key?(map, :number) do
-        {:ok, Nestru.get(map, :number)}
+        {:ok, %{}}
       else
         {:error, "Can't continue without house number."}
       end
@@ -232,7 +235,7 @@ Nestru.decode_from_map(map, Quote)
 ```
 
 For more sophisticated key mapping you can implement 
-the `gather_fields_map/3` function of `Nestru.PreDecoder` explicitly.
+the `gather_fields_from_map/3` function of `Nestru.PreDecoder` explicitly.
 
 ## Serializing type-dependent fields
 
@@ -245,7 +248,7 @@ defmodule BookCollection do
   defstruct [:name, :items]
 
   defimpl Nestru.Encoder do
-    def encode_to_map(struct) do
+    def gather_fields_from_struct(struct, _context) do
       items_kinds =
         Enum.map(struct.items, fn %module{} ->
           module
@@ -253,13 +256,7 @@ defmodule BookCollection do
           |> Enum.join(".")
         end)
 
-      items =
-        Enum.map(struct.items, fn item ->
-          {:ok, map} = Nestru.encode_to_map(item)
-          map
-        end)
-
-      {:ok, %{name: struct.name, items_kinds: items_kinds, items: items}}
+      {:ok, %{name: struct.name, items: struct.items, items_kinds: items_kinds}}
     end
   end
 
@@ -286,14 +283,14 @@ defmodule BookCollection.Magazine do
   @derive [Nestru.Encoder, Nestru.Decoder]
   defstruct [:issue]
 end
-
-alias BookCollection.{Book, Magazine}
 ```
 
 Let's convert the nested struct into a map. The returned map gets 
 extra `items_kinds` field with types information:
 
 ```elixir
+alias BookCollection.{Book, Magazine}
+
 collection = %BookCollection{
   name: "Duke of Norfolk's archive",
   items: [
@@ -346,7 +343,7 @@ the structure of the input map is correct.
 
 [ExJsonPath library](https://hex.pm/packages/exjsonpath) allows querying maps
 (JSON objects) and lists (JSON arrays), using JSONPath expressions.
-The queries can be useful in `Nestru.PreDecoder.gather_fields_map/3`
+The queries can be useful in `Nestru.PreDecoder.gather_fields_from_map/3`
 function to assemble fields for decoding from a map having a very different shape
 from the target struct.
 
@@ -362,6 +359,13 @@ the struct's field values match its `t()` type and associated preconditions.
 <!-- Documentation -->
 
 ## Changelog
+
+### 0.3.0
+
+* Rename `Nestru.PreDecoder.gather_fields_map/3` to `gather_fields_from_map/3`.
+* Rename `Nestru.Encoder.encode_to_map/1` to `Nestru.Encoder.gather_fields_from_struct/2`
+* Make `encode_to_map(!)/2` work only with structs and add `encode_to_list_of_maps(!)/2` for lists.
+* Add context parameter to `encode_to_*` functions.
 
 ### 0.2.1
 

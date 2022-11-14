@@ -44,7 +44,7 @@ defmodule NestruDeriveTest do
   end
 
   describe "Derive of Nestru.Encoder protocol should" do
-    test "generate encode_to_map/2 implementation for appropriate struct" do
+    test "generate default implementation for appropriate struct" do
       struct = %LineItem{amount: 100}
 
       assert Nestru.encode_to_map!(struct) == %{amount: 100}

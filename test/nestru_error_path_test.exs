@@ -32,6 +32,44 @@ defmodule NestruErrorPathTest do
     end
   end
 
+  test "Nestru should join error path with one returned from Nestru.Encoder.gather_fields_from_struct/2" do
+    wrong_item = %Totals{sum: 345.00, discount: 20.00, total: 600.00}
+
+    list_of_structs = [
+      %Order{id: "123"},
+      %OrdersBook{
+        orders: [
+          %Order{id: "1"},
+          %Order{id: "2", totals: wrong_item}
+        ]
+      }
+    ]
+
+    expected_get_in_keys = [
+      Access.at!(1),
+      Access.key!(:orders),
+      Access.at!(1),
+      Access.key!(:totals)
+    ]
+
+    assert get_in(list_of_structs, expected_get_in_keys) == wrong_item
+
+    expected_path = [1, :orders, 1, :totals]
+
+    assert {:error, %{get_in_keys: ^expected_get_in_keys, path: ^expected_path}} =
+             Nestru.encode_to_list_of_maps(list_of_structs)
+
+    expected_regex =
+      regex_substring("""
+      See details by calling get_in/2 with the list and the following \
+      keys: [Access.at!(1), Access.key!(:orders), Access.at!(1), Access.key!(:totals)]\
+      """)
+
+    assert_raise RuntimeError, expected_regex, fn ->
+      Nestru.encode_to_list_of_maps!(list_of_structs)
+    end
+  end
+
   test "Error message from Nestru.decode_from_map/3 should have path and get_in_keys pointing to a wrong part of map" do
     wrong_item = %{sum: 345.00, discount: 20.00, total: 600.00}
 
