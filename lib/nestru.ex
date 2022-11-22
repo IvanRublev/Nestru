@@ -645,7 +645,7 @@ defmodule Nestru do
   end
 
   def decode_from_list_of_maps(list, _struct_atoms, _context) do
-    {:ok, list}
+    {:error, %{message: expected_list_value(list)}}
   end
 
   @doc """
@@ -664,7 +664,7 @@ defmodule Nestru do
   end
 
   def decode_from_list_of_maps!(list, _struct_atoms, _context) do
-    list
+    raise expected_list_value(list)
   end
 
   defp reduce_via_from_map(list, [_ | _] = struct_atoms, context)
@@ -706,5 +706,11 @@ defmodule Nestru do
        the struct module atoms list length (#{length(struct_atoms)}).\
        """
      }}
+  end
+
+  defp expected_list_value(value) do
+    """
+    The first argument should be a list. Got #{inspect(value)} instead.\
+    """
   end
 end

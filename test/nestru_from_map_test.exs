@@ -363,11 +363,6 @@ defmodule NestruFromMapTest do
              ] = Nestru.decode_from_list_of_maps!(maps_list, [OrderNonNegativeTotal, Order])
     end
 
-    test "return first value given to decode_from_list_of_maps/2 if its not a list" do
-      assert Nestru.decode_from_list_of_maps(nil, Order) == {:ok, nil}
-      assert Nestru.decode_from_list_of_maps!(nil, Order) == nil
-    end
-
     test "return first error receiving decode_from_map" do
       maps_list = [
         %{id: "1", max_total: 50_000},
@@ -386,6 +381,19 @@ defmodule NestruFromMapTest do
 
       assert_raise RuntimeError, regex_substring("internal error"), fn ->
         Nestru.decode_from_list_of_maps!(maps_list, [Order, OrderInternalError])
+      end
+    end
+
+    test "return error when first argument is not a list" do
+      map = %{}
+
+      expected_messge = "The first argument should be a list. Got %{} instead."
+
+      assert {:error, %{message: ^expected_messge}} =
+               Nestru.decode_from_list_of_maps(map, [Order])
+
+      assert_raise RuntimeError, regex_substring(expected_messge), fn ->
+        Nestru.decode_from_list_of_maps!(map, [Order])
       end
     end
 
