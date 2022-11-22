@@ -24,6 +24,7 @@ defprotocol Nestru.Encoder do
 
   To generate the default implementation of the function, add
   the `@derive #{inspect(__MODULE__)}` attribute to the struct.
+  The `:only` and `:except` options are supported to filter the fields.
 
   The default implementation gathers keys from the struct
   by calling `Map.from_struct/1`.
@@ -35,6 +36,13 @@ defprotocol Nestru.Encoder do
         @derive Nestru.Encoder
 
         defstruct [:id, :name]
+      end
+
+      def Purchaser do
+        # Encode only one field
+        @derive {Nestru.Encoder, only: [:id]}
+
+        defstruct [:id, :name, :address]
       end
 
       defmodule FruitBox do
@@ -53,10 +61,34 @@ defprotocol Nestru.Encoder do
 end
 
 defimpl Nestru.Encoder, for: Any do
-  defmacro __deriving__(module, _struct, _opts) do
+  defmacro __deriving__(module, struct, opts) do
+    opts = opts || []
+
+    drop_keys =
+      cond do
+        Keyword.has_key?(opts, :only) ->
+          struct
+          |> Map.keys()
+          |> List.delete(:__struct__)
+          |> Kernel.--(opts[:only])
+
+        Keyword.has_key?(opts, :except) ->
+          opts[:except]
+
+        true ->
+          []
+      end
+
+    drop_keys = Macro.escape(drop_keys)
+
     quote do
       defimpl Nestru.Encoder, for: unquote(module) do
-        def gather_fields_from_struct(struct, _context), do: {:ok, Map.from_struct(struct)}
+        def gather_fields_from_struct(struct, _context) do
+          {:ok,
+           struct
+           |> Map.from_struct()
+           |> Map.drop(unquote(drop_keys))}
+        end
       end
     end
   end

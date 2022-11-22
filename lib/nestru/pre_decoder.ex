@@ -25,11 +25,23 @@ defprotocol Nestru.PreDecoder do
   The default implementation returns the input map unmodified.
 
   To generate the keys translating implementation, set the `@derive` module
-  attribute to the tuple of `Nestru.PreDecoder` and a map with key names translation.
+  attribute to the tuple of `Nestru.PreDecoder` and the `:translate` option
+  specifying the map with key names translation.
   It's useful for copying the value from the input map with the given key
   to the decodable map with the struct filed key. See the example below.
 
   ## Examples
+
+      def FruitEnergy do
+        # Keys map can be given with deriving the protocol.
+        # The following will make a function copying the value
+        # of the "energy_factor" key into the :factor key in the map.
+        @derive {Nestru.PreDecoder, translate: %{"energy_factor" => :factor}}
+
+        @derive Nestru.Decoder
+
+        defstruct [:value]
+      end
 
       defmodule FruitBox do
         @derive Nestru.Decoder
@@ -43,42 +55,26 @@ defprotocol Nestru.PreDecoder do
           end
         end
       end
-
-      def FruitEnergy do
-        # Keys map can be given with deriving the protocol.
-        # The following will make a function copying the value
-        # of the "energy_factor" key into the :factor key in the map.
-        @derive {Nestru.PreDecoder, %{"energy_factor" => :factor}}
-
-        @derive Nestru.Decoder
-
-        defstruct [:value]
-      end
   """
   def gather_fields_from_map(value, context, map)
 end
 
 defimpl Nestru.PreDecoder, for: Any do
   defmacro __deriving__(module, _struct, opts) do
-    opts =
-      cond do
-        opts == [] ->
-          %{}
-
-        is_map(opts) ->
-          opts
-
-        true ->
-          raise "Nestru.PreDecoder protocol should be derived with fields copying map."
+    translation_map =
+      if Keyword.has_key?(opts, :translate) do
+        opts[:translate]
+      else
+        %{}
       end
 
-    fields_map = Macro.escape(opts)
+    translation_map = Macro.escape(translation_map)
 
     quote do
       defimpl Nestru.PreDecoder, for: unquote(module) do
         def gather_fields_from_map(_value, _context, map) do
           {:ok,
-           Enum.reduce(unquote(fields_map), map, fn {from, to}, map ->
+           Enum.reduce(unquote(translation_map), map, fn {from, to}, map ->
              Map.put(map, to, Nestru.get(map, from))
            end)}
         end

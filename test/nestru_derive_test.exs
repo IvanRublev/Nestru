@@ -2,22 +2,8 @@ defmodule NestruDeriveTest do
   use ExUnit.Case, async: true
 
   require Protocol
-  import ExUnit.CaptureIO
 
   describe "Derive of Nestru.Decoder protocol should" do
-    test "raise error giving no hint map as option" do
-      expected_error = """
-      Nestru.Decoder protocol should be derived with map, \
-      see from_map_hint/3 docs for details.\
-      """
-
-      assert_raise RuntimeError, expected_error, fn ->
-        capture_io(:stderr, fn ->
-          Protocol.derive(Nestru.Decoder, LineItem, :not_a_map)
-        end)
-      end
-    end
-
     test "generate from_map_hint/3 implementation for appropriate struct giving hint map as option" do
       map = %{
         items: [%{amount: 100}, %{amount: 150}],

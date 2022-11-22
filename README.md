@@ -50,7 +50,7 @@ should hold a value of `Total` struct like the following:
 
 ```elixir
 defmodule Order do
-  @derive {Nestru.Decoder, %{total: Total}}
+  @derive {Nestru.Decoder, hint: %{total: Total}}
   defstruct [:id, :total]
 end
 
@@ -80,7 +80,7 @@ Now we add the `:items` field to `Order1` struct to hold a list of `LineItem`s:
 
 ```elixir
 defmodule Order1 do
-  @derive {Nestru.Decoder, %{total: Total}}
+  @derive {Nestru.Decoder, hint: %{total: Total}}
   defstruct [:id, :items, :total]
 end
 
@@ -112,7 +112,7 @@ that field:
 
 ```elixir
 defmodule Order2 do
-  @derive {Nestru.Decoder, %{total: Total, items: [LineItem]}}
+  @derive {Nestru.Decoder, hint: %{total: Total, items: [LineItem]}}
 
   defstruct [:id, :items, :total]
 end
@@ -145,12 +145,12 @@ and bypasses the error to the caller.
 
 ```elixir
 defmodule Location do
-  @derive {Nestru.Decoder, %{street: Street}}
+  @derive {Nestru.Decoder, hint: %{street: Street}}
   defstruct [:street]
 end
 
 defmodule Street do
-  @derive {Nestru.Decoder, %{house: House}}
+  @derive {Nestru.Decoder, hint: %{house: House}}
   defstruct [:house]
 end
 
@@ -212,7 +212,7 @@ can be gathered by adopting `Nestru.PreDecoder` protocol like the following:
 ```elixir
 defmodule Quote do
   @derive [
-    {Nestru.PreDecoder, %{"cost_value" => :cost}},
+    {Nestru.PreDecoder, translate: %{"cost_value" => :cost}},
     Nestru.Decoder
   ]
 
@@ -359,6 +359,12 @@ the struct's field values match its `t()` type and associated preconditions.
 <!-- Documentation -->
 
 ## Changelog
+
+### 0.3.1
+
+* Add `:only` and `:except` options for deriving of `Nestru.Encoder` protocol
+* Add explicit `:translate` option for deriving of `Nestru.PreDecoder` protocol
+* Add explicit `:hint` option for deriving of `Nestru.Decoder` protocol
 
 ### 0.3.0
 

@@ -41,7 +41,7 @@ defprotocol Nestru.Decoder do
 
   To generate the implementation of the function for the given struct in short form,
   set the `@derive module` attribute to the tuple of `#{inspect(__MODULE__)}`
-  and the `hint` to be returned.
+  and the `:hint` option specifying the hint map to be returned.
 
   The default implementation derived for the struct pulls all values from
   the input map unmodified.
@@ -59,7 +59,7 @@ defprotocol Nestru.Decoder do
 
       def FruitBox.Fruit do
         # Give a hint in a compact form with deriving the protocol
-        @derive {Nestru.Decoder, %{vitamins: [Vitamin], supplier: Supplier}}
+        @derive {Nestru.Decoder, hint: %{vitamins: [Vitamin], supplier: Supplier}}
 
         defstruct [:vitamins, :supplier]
       end
@@ -81,19 +81,14 @@ end
 
 defimpl Nestru.Decoder, for: Any do
   defmacro __deriving__(module, _struct, opts) do
-    opts =
-      cond do
-        opts == [] ->
-          %{}
-
-        is_map(opts) ->
-          opts
-
-        true ->
-          raise "Nestru.Decoder protocol should be derived with map, see from_map_hint/3 docs for details."
+    hint_map =
+      if Keyword.has_key?(opts, :hint) do
+        opts[:hint]
+      else
+        %{}
       end
 
-    hint_map = Macro.escape(opts)
+    hint_map = Macro.escape(hint_map)
 
     quote do
       defimpl Nestru.Decoder, for: unquote(module) do

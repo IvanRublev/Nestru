@@ -1,7 +1,7 @@
 defmodule Leaf do
   @moduledoc false
 
-  @derive {Nestru.Decoder, %{leaf: Leaf}}
+  @derive {Nestru.Decoder, hint: %{leaf: Leaf}}
   defstruct [:leaf, :value]
 end
 
@@ -10,7 +10,7 @@ defmodule Invoice do
 
   @derive [
     Nestru.Decoder,
-    {Nestru.PreDecoder, %{"totalSum" => :total_sum, atom_key: :key}}
+    {Nestru.PreDecoder, translate: %{"totalSum" => :total_sum, atom_key: :key}}
   ]
   defstruct [:total_sum, :key]
 end
@@ -88,6 +88,20 @@ defmodule Order do
   end
 end
 
+defmodule OrderOnlyName do
+  @moduledoc false
+  @derive {Nestru.Encoder, only: [:name]}
+
+  defstruct [:a, :b, :name]
+end
+
+defmodule OrderExceptName do
+  @moduledoc false
+  @derive {Nestru.Encoder, except: [:name]}
+
+  defstruct [:a, :b, :name]
+end
+
 defmodule LineItem do
   @moduledoc false
 
@@ -100,7 +114,7 @@ defmodule LineItemHolder do
 
   @derive {
     Nestru.Decoder,
-    %{
+    hint: %{
       items: &__MODULE__.decode_items/1,
       totals: Totals
     }

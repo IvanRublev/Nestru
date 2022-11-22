@@ -11,6 +11,18 @@ defmodule NestruToMapTest do
       assert %{max_total: 50_000} == Nestru.encode_to_map!(struct, :keep_one_field)
     end
 
+    test "encode struct to map given :only and :except parameters deriving Encoder" do
+      struct = %OrderOnlyName{a: "123785-558", b: "bbb", name: "only"}
+
+      assert {:ok, %{name: "only"}} == Nestru.encode_to_map(struct)
+      assert %{name: "only"} == Nestru.encode_to_map!(struct)
+
+      struct = %OrderExceptName{a: "123785-558", b: "bbb", name: "except"}
+
+      assert {:ok, %{a: "123785-558", b: "bbb"}} == Nestru.encode_to_map(struct)
+      assert %{a: "123785-558", b: "bbb"} == Nestru.encode_to_map!(struct)
+    end
+
     test "return error giving not a struct value to encode_to_map(!)/1" do
       assert_raise RuntimeError, regex_substring("expects a struct as input value"), fn ->
         Nestru.encode_to_map(nil)
