@@ -360,6 +360,10 @@ the struct's field values match its `t()` type and associated preconditions.
 
 ## Changelog
 
+### 0.3.3
+
+* Fix the regress - make the decoding of an empty list return an empty list
+
 ### 0.3.2
 
 * Return error from `decode_from_list_of_maps(!)/2/3` for non-list values

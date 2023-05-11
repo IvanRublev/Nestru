@@ -334,6 +334,11 @@ defmodule NestruFromMapTest do
   end
 
   describe "For a list of maps Nestru should" do
+    test "return empty list giving empty list" do
+      assert {:ok, []} = Nestru.decode_from_list_of_maps([], Order)
+      assert [] = Nestru.decode_from_list_of_maps!([], Order)
+    end
+
     test "shape list of structs giving struct module atom as second argument" do
       map = %{id: "1", max_total: 50_000}
       maps_list = [map, map]

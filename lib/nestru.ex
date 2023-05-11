@@ -620,7 +620,7 @@ defmodule Nestru do
   @doc """
   Decodes a list of maps into the list of the given struct values.
 
-  The first argument is a list of maps.
+  The first argument is a list.
 
   If the second argument is a struct's module atom, then the function calls
   the `decode_from_map/3` on each input list item.
@@ -638,7 +638,7 @@ defmodule Nestru do
   """
   def decode_from_list_of_maps(list, struct_atoms, context \\ [])
 
-  def decode_from_list_of_maps([_ | _] = list, struct_atoms, context) do
+  def decode_from_list_of_maps(list, struct_atoms, context) when is_list(list) do
     list
     |> reduce_via_from_map(struct_atoms, context)
     |> maybe_ok_reverse()
@@ -656,7 +656,7 @@ defmodule Nestru do
   """
   def decode_from_list_of_maps!(list, struct_atoms, context \\ [])
 
-  def decode_from_list_of_maps!([_ | _] = list, struct_atoms, context) do
+  def decode_from_list_of_maps!(list, struct_atoms, context) when is_list(list) do
     case list |> reduce_via_from_map(struct_atoms, context) |> maybe_ok_reverse() do
       {:ok, list} -> list
       {:error, %{message: message}} -> raise message
