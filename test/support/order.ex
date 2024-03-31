@@ -23,8 +23,8 @@ defmodule OrdersBook do
   defstruct [:orders]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
-      case map[:orders] do
+    def decode_fields_hint(_empty_struct, _context, value) do
+      case value[:orders] do
         # wrong
         [_] -> {:ok, %{orders: Order}}
         # correct
@@ -42,28 +42,28 @@ defmodule Order do
   defstruct [:id, :max_total, :items, :totals, :empty_totals, :maybe_totals]
 
   defimpl Nestru.PreDecoder do
-    def gather_fields_from_map(_value, context, map) do
+    def gather_fields_for_decoding(_empty_struct, context, value) do
       cond do
-        Map.has_key?(map, :gather_max_total_custom_key) ->
-          {:ok, Map.put(map, :max_total, map.gather_max_total_custom_key)}
+        Map.has_key?(value, :gather_max_total_custom_key) ->
+          {:ok, Map.put(value, :max_total, value.gather_max_total_custom_key)}
 
-        Map.has_key?(map, :gather_wrong_return) ->
+        Map.has_key?(value, :gather_wrong_return) ->
           :not_a_tuple
 
-        Map.has_key?(map, :gather_failed) ->
+        Map.has_key?(value, :gather_failed) ->
           {:error, "gather failed"}
 
-        Map.has_key?(map, :context_to_max_total) ->
-          {:ok, Map.put(map, :max_total, context)}
+        Map.has_key?(value, :context_to_max_total) ->
+          {:ok, Map.put(value, :max_total, context)}
 
         true ->
-          {:ok, map}
+          {:ok, value}
       end
     end
   end
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, context, _map) do
+    def decode_fields_hint(_empty_struct, context, _value) do
       if is_list(context) and context[:override_max_total] do
         {:ok, %{max_total: fn _ -> {:ok, context[:override_max_total]} end}}
       else
@@ -132,8 +132,8 @@ defmodule Totals do
   defstruct [:sum, :discount, :total]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
-      if Map.get(map, :total, 0) > 500 do
+    def decode_fields_hint(_empty_struct, _context, value) do
+      if Map.get(value, :total, 0) > 500 do
         {:error, "total can't be greater then 500"}
       else
         {:ok, %{}}

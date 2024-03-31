@@ -10,18 +10,23 @@ defmodule NestruPreDecoderTest do
         gather_max_total_custom_key: 50_000
       }
 
-      assert {:ok, %Order{max_total: 500.00}} = Nestru.decode_from_map(map, Order)
-      assert %Order{max_total: 500.00} = Nestru.decode_from_map!(map, Order)
+      assert {:ok, %Order{max_total: 500.00}} = Nestru.decode(map, Order)
+      assert %Order{max_total: 500.00} = Nestru.decode!(map, Order)
     end
 
-    test "configure fields gathering in deriving function" do
+    test "bypasses binary value as fields gathering result" do
+      assert {:ok, %OrderBinary{max_total: 500.00}} =
+               Nestru.decode("max_total: 500.00", OrderBinary)
+    end
+
+    test "configure fields gathering via deriving :translate directive" do
       map = %{
         "totalSum" => 125.0,
         "atom_key" => 5.0
       }
 
-      assert {:ok, %Invoice{total_sum: 125.00, key: 5.0}} = Nestru.decode_from_map(map, Invoice)
-      assert %Invoice{total_sum: 125.00, key: 5.0} = Nestru.decode_from_map!(map, Invoice)
+      assert {:ok, %Invoice{total_sum: 125.00, key: 5.0}} = Nestru.decode(map, Invoice)
+      assert %Invoice{total_sum: 125.00, key: 5.0} = Nestru.decode!(map, Invoice)
     end
 
     test "bypass error received" do
@@ -29,25 +34,25 @@ defmodule NestruPreDecoderTest do
 
       expected_error = "gather failed"
 
-      assert {:error, %{message: ^expected_error}} = Nestru.decode_from_map(map, Order)
+      assert {:error, %{message: ^expected_error}} = Nestru.decode(map, Order)
 
       assert_raise RuntimeError, regex_substring(expected_error), fn ->
-        Nestru.decode_from_map!(map, Order)
+        Nestru.decode!(map, Order)
       end
     end
 
-    test "return error receiving not a {:ok | :error, term} from gather function" do
+    test "return error receiving not a {:ok | :error, map | binary} from gather function" do
       map = %{gather_wrong_return: 50_000}
 
       expected_error = """
-      Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_from_map/3 \
+      Expected a {:ok, map | binary} | {:error, term} value from Nestru.PreDecoder.gather_fields_for_decoding/3 \
       function implemented for Order, received :not_a_tuple instead.\
       """
 
-      assert {:error, %{message: ^expected_error}} = Nestru.decode_from_map(map, Order)
+      assert {:error, %{message: ^expected_error}} = Nestru.decode(map, Order)
 
       assert_raise RuntimeError, regex_substring(expected_error), fn ->
-        Nestru.decode_from_map!(map, Order)
+        Nestru.decode!(map, Order)
       end
     end
   end

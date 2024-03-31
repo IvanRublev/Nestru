@@ -2,20 +2,24 @@ defprotocol Nestru.Encoder do
   @fallback_to_any true
 
   @doc """
-  Returns the fields map from the given struct to be encoded to map recursively.
+  Returns the fields gathered from the given struct, which can be encoded further.
 
-  It can be used to adapt the keys of the map to target shape.
+  It can be used to rename the keys of the map, or to turn the whole struct to binary.
 
   The first argument is the encodable struct value adopting the protocol.
 
-  The second argument is the context given to `encode_to_map/2`
+  The second argument is the context given to `encode/2`
   or `encode_to_list_of_maps/2` functions.
 
   `Nestru` calls this function as the first step of the encoding procedure.
 
-  If the function returns `{:ok, map}`, then encoding continues, and each `map`
-  value that is struct is encoded into a map, the same is done recursively for lists,
-  and other values are kept as is.
+  If the function returns `{:ok, item}`, then the encoding continues
+  depending on the value of the `item` as follows:
+
+  * for a binary, the encoding finishes, and the binary is returned
+  * for a map, the encoding continues for each key-value pair. If the value is a struct
+  then it is encoded into a map with `encode/1`, the same is done recursively for lists,
+  all other values are left as they are.
 
   If the function returns `{:error, message}` tuple, then encoding stops, and
   the error is bypassed to the caller.
@@ -45,14 +49,29 @@ defprotocol Nestru.Encoder do
         defstruct [:id, :name, :address]
       end
 
-      defmodule FruitBox do
-        defstruct [:items]
+      defmodule BoxLabel do
+        defstruct [:prefix, :number]
 
-        # Implement the function returning the map explicitly
+        # Encode label as a binary
         defimpl Nestru.Encoder do
           def gather_fields_from_struct(struct, _context) do
-            # Rename the key in the result map
-            {:ok, %{elements: &Map.get(struct, :items)}}
+            {:ok, "FF{struct.prefix}-{struct.number}"}
+          end
+        end
+      end
+
+      defmodule FruitBox do
+        defstruct [:items, :label]
+
+        # Rename the :items key to :elements in the result map
+        defimpl Nestru.Encoder do
+          def gather_fields_from_struct(struct, _context) do
+            map = Map.from_struct(struct)
+
+            {:ok,
+             map
+             |> Map.put(:elements, Map.get(map, :items))
+             |> Map.delete(:items)}
           end
         end
       end
@@ -94,6 +113,14 @@ defimpl Nestru.Encoder, for: Any do
   end
 
   def gather_fields_from_struct(%module{}, _context) do
-    raise "Please, @derive Nestru.Encoder protocol before defstruct/1 call in #{inspect(module)} or defimpl the protocol in the module explicitly to support encoding into map."
+    exception_text =
+      if module in [DateTime, URI, Range] do
+        "Please, defimpl the protocol for the #{inspect(module)} module explicitly to support encoding into a map or a binary. \
+See an example on how to encode modules from Elixir on https://github.com/IvanRublev/Nestru#date-time-and-uri"
+      else
+        "Please, @derive Nestru.Encoder protocol before defstruct/1 call in #{inspect(module)} or defimpl the protocol in the module explicitly to support encoding into a map or a binary."
+      end
+
+    raise exception_text
   end
 end

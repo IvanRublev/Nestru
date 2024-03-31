@@ -22,17 +22,16 @@ jobs:
           - otp: 25.3
             elixir: 1.14.4
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v4
       - uses: erlef/setup-beam@v1.15
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
       - name: Restore dependencies cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: deps
-          key: ${{ runner.os }}-mix-cache-${{ hashFiles('**/mix.lock') }}
-          restore-keys: ${{ runner.os }}-mix-cache-
+          key: ${{ runner.os }}-mix-cache-${{ hashFiles('**/mix.exs') }}
       - name: Get dependencies
         run: mix deps.get
       - name: Run checks

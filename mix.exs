@@ -1,7 +1,7 @@
 defmodule Nestru.MixProject do
   use Mix.Project
 
-  @version "0.3.3"
+  @version "1.0.0"
   @repo_url "https://github.com/IvanRublev/Nestru"
 
   def project do
@@ -50,8 +50,9 @@ defmodule Nestru.MixProject do
       {:credo, "~> 1.5", only: :dev, runtime: false},
       {:excoveralls, "~> 0.13.4", only: :test, runtime: false},
       {:mix_test_watch, "~> 1.0", only: :test, runtime: false},
-      # Documentation dependencies
-      {:ex_doc, ">= 0.0.0", only: :docs, runtime: false}
+      # Documentation dependencies compatible with Elixir 1.11.0
+      {:ex_doc, "0.25.1", only: :docs, runtime: false},
+      {:nimble_parsec, "1.1.0", only: :docs, runtime: false}
     ]
   end
 

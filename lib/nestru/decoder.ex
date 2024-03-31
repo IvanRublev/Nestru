@@ -6,13 +6,16 @@ defprotocol Nestru.Decoder do
 
   The first argument is an empty struct value adopting the protocol.
 
-  The second argument is the context value given to the `Nestru.decode_from_map/3` function call.
+  The second argument is the context value given to the `Nestru.decode/3` function call.
 
-  The third argument is a map to be decoded into the struct.
+  The third argument is a map or a binary to be decoded into the struct.
 
-  If the function returns `{:ok, hint}`, then the `hint` is expected to be a map
-  with key-value pairs specifying the decoding hint for the struct fields with
-  the given key and the value specifying the following:
+  If the function returns `{:ok, hint}`, then the `hint` is expected to be a map or
+  an instance of the decodable struct.
+
+  When the map is returned then, key-value pairs give the decoding hint about
+  the struct's fields with the key equal to field's name and the value specifying
+  the following:
 
     * A module's atom (f.e. `Module`) specifies that the appropriate field's
       value should be decoded as a nested struct defined in the module.
@@ -28,9 +31,12 @@ defprotocol Nestru.Decoder do
       it is expected to return `{:ok, term}`,
       `{:error, %{message: term, path: list}}`, or `{:error, term}`.
 
-  Any field missing the key in the `hint` receives the value as-is.
-  The `%{}` empty `hint` value defines that all fields of the
-  struct take all values from the input map unmodified.
+  Any field missing the key in the `hint` receives the value as-is from the input map.
+  The `%{}` empty `hint` value defines that all fields of the struct
+  take all values from the input map unmodified.
+
+  When the returned `hint` is an instance of the decodable struct, then it is
+  returned as is.
 
   If the function returns `{:ok, nil}`, then the decoded struct's value is nil.
 
@@ -69,14 +75,14 @@ defprotocol Nestru.Decoder do
 
         # Implement the function returning the hint explicitly
         defimpl Nestru.Decoder do
-          def from_map_hint(_value, _context, map) do
+          def decode_fields_hint(_empty_struct, _context, value) do
             # Give a function to decode the list field as a hint, other fields are copied as is
             {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, FruitBox.Fruit)}}
           end
         end
       end
   """
-  def from_map_hint(value, context, map)
+  def decode_fields_hint(empty_struct, context, value)
 end
 
 defimpl Nestru.Decoder, for: Any do
@@ -92,14 +98,22 @@ defimpl Nestru.Decoder, for: Any do
 
     quote do
       defimpl Nestru.Decoder, for: unquote(module) do
-        def from_map_hint(_value, _context, _map) do
+        def decode_fields_hint(_empty_struct, _context, _value) do
           {:ok, unquote(hint_map)}
         end
       end
     end
   end
 
-  def from_map_hint(%module{} = _value, _context, _map) do
-    raise "Please, @derive Nestru.Decoder protocol before defstruct/1 call in #{inspect(module)} or defimpl the protocol in the module explicitly to support decoding from map."
+  def decode_fields_hint(%module{} = _empty_struct, _context, _value) do
+    exception_text =
+      if module in [DateTime, URI, Range] do
+        "Please, defimpl the protocol for the #{inspect(module)} module explicitly to support decoding from a map or a binary. \
+See an example on how to decode modules from Elixir on https://github.com/IvanRublev/Nestru#date-time-and-uri"
+      else
+        "Please, @derive Nestru.Decoder protocol before defstruct/1 call in #{inspect(module)} or defimpl the protocol in the module explicitly to support decoding from a map or a binary."
+      end
+
+    raise exception_text
   end
 end

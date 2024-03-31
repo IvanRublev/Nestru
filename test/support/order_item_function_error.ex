@@ -4,7 +4,7 @@ defmodule ErroredItemsBook do
   defstruct [:items]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, _map) do
+    def decode_fields_hint(_empty_struct, _context, _value) do
       {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, OrderItemFunctionError)}}
     end
   end
@@ -17,7 +17,7 @@ defmodule OrderItemFunctionError do
   defstruct [:id]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, _map) do
+    def decode_fields_hint(_empty_struct, _context, _value) do
       {:ok,
        %{
          id: fn

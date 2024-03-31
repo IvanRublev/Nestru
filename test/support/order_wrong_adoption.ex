@@ -4,8 +4,8 @@ defmodule OrderWrongAdoption do
   defstruct [:id]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
-      case map.id do
+    def decode_fields_hint(_empty_struct, _context, value) do
+      case value.id do
         1 -> :nan
         2 -> :error
         3 -> {:ok, :nan}

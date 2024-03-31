@@ -5,8 +5,8 @@ defmodule OrderWrongItemFunction do
   defstruct [:id]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
-      if Map.has_key?(map, :only_message_in_error) do
+    def decode_fields_hint(_empty_struct, _context, value) do
+      if Map.has_key?(value, :only_message_in_error) do
         {:ok, %{id: fn _ -> {:error, %{message: nil}} end}}
       else
         {:ok, %{id: fn _ -> 16 end}}

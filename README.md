@@ -44,23 +44,39 @@ The library generates maps with atom keys during the struct encode operation.
   </a>
 </p>
 
-Let's say we have an `Order` with `Total` that we want to decode from a map.
-First, let's derive `Nestru.Decoder` protocol and specify that field `:total`
-should hold a value of `Total` struct like the following:
+Let's say we have an `Order` with a total field which is an instance of a `Total` struct.
+And we want to serialize between an instance of `Order` and a map.
+
+Firstly, let's derive `Nestru.Encoder` and `Nestru.Decoder` protocols 
+and give a hint that the field `:total` should hold a value of `Total` struct
+like the following:
 
 ```elixir
 defmodule Order do
-  @derive {Nestru.Decoder, hint: %{total: Total}}
+  @derive [Nestru.Encoder, {Nestru.Decoder, hint: %{total: Total}}]
   defstruct [:id, :total]
 end
 
 defmodule Total do
-  @derive Nestru.Decoder
+  @derive [Nestru.Encoder, Nestru.Decoder]
   defstruct [:sum]
 end
 ```
+```output
+{:module, Total, <<70, 79, 82, 49, 0, 0, 8, ...>>, %Total{sum: nil}}
+```
 
-Now we decode the `Order` from the nested map like that:
+Secondly, we can encode the `Order` into the map like that:
+
+```elixir
+model = %Order{id: "A548", total: %Total{sum: 500}}
+{:ok, map} = Nestru.encode(model)
+```
+```output
+{:ok, %{id: "A548", total: %{sum: 500}}}
+```
+
+And decode the map back into the `Order` like the following:
 
 ```elixir
 map = %{
@@ -68,19 +84,23 @@ map = %{
   "total" => %{"sum" => 500}
 }
 
-{:ok, model} = Nestru.decode_from_map(map, Order)
+{:ok, model} = Nestru.decode(map, Order)
 ```
 ```output
 {:ok, %Order{id: "A548", total: %Total{sum: 500}}}
 ```
 
-We get the order as the expected nested struct. Good!
+As you can see the data markup is in place, the `Total` struct is nested within the `Order` struct.
 
-Now we add the `:items` field to `Order1` struct to hold a list of `LineItem`s:
+## A list of structs in a field
+
+Let's add the `:items` field to `Order1` struct to hold a list of `LineItem`s 
+and give a hint to `Nestru` on how to decode that field:
 
 ```elixir
 defmodule Order1 do
-  @derive {Nestru.Decoder, hint: %{total: Total}}
+  @derive {Nestru.Decoder, hint: %{total: Total, items: [LineItem]}}
+
   defstruct [:id, :items, :total]
 end
 
@@ -89,8 +109,11 @@ defmodule LineItem do
   defstruct [:amount]
 end
 ```
+```output
+{:module, LineItem, <<70, 79, 82, 49, 0, 0, 8, ...>>, %LineItem{amount: nil}}
+```
 
-and we decode the `Order1` from the nested map like that:
+Let's decode:
 
 ```elixir
 map = %{
@@ -99,33 +122,11 @@ map = %{
   "total" => %{"sum" => 500}
 }
 
-{:ok, model} = Nestru.decode_from_map(map, Order1)
-```
-```output
-{:ok, %Order1{id: "A548", items: [%{"amount" => 150}, %{"amount" => 350}], total: %Total{sum: 500}}}
-```
-
-The `:items` field value of the `%Order1{}` is still the list of maps 
-and not structs 🤔 This is because `Nestru` has no clue what kind of struct 
-these list items should be. So let's give a hint to `Nestru` on how to decode
-that field:
-
-```elixir
-defmodule Order2 do
-  @derive {Nestru.Decoder, hint: %{total: Total, items: [LineItem]}}
-
-  defstruct [:id, :items, :total]
-end
-```
-
-Let's decode again:
-
-```elixir
-{:ok, model} = Nestru.decode_from_map(map, Order2)
+{:ok, model} = Nestru.decode(map, Order1)
 ```
 ```output
 {:ok,
- %Order2{
+ %Order1{
    id: "A548",
    items: [%LineItem{amount: 150}, %LineItem{amount: 350}],
    total: %Total{sum: 500}
@@ -136,6 +137,97 @@ Voilà, we have field values as nested structs 🎉
 
 For the case when the list contains several structs of different types, please,
 see the Serializing type-dependent fields section below.
+
+
+## Date Time and URI
+
+Let's say we have an `Order2` struct with some `URI` and `DateTime` fields in it. 
+These attributes are structs in Elixir, at the same time they usually
+kept as binary representations in a map.
+
+`Nestru` supports conversion between binaries 
+and structs, all we need to do is to implement the `Nestry.Encoder` 
+and `Nestru.Decoder` protocols for these structs like the following:
+
+```elixir
+# DateTime
+defimpl Nestru.Encoder, for: DateTime do
+  def gather_fields_from_struct(struct, _context) do
+    {:ok, DateTime.to_string(struct)}
+  end
+end
+
+defimpl Nestru.Decoder, for: DateTime do
+  def decode_fields_hint(_empty_struct, _context, value) do
+    case DateTime.from_iso8601(value) do
+      {:ok, date_time, _offset} -> {:ok, date_time}
+      error -> error
+    end
+  end
+end
+
+# URI
+defimpl Nestru.Encoder, for: URI do
+  def gather_fields_from_struct(struct, _context) do
+    {:ok, URI.to_string(struct)}
+  end
+end
+
+defimpl Nestru.Decoder, for: URI do
+  def decode_fields_hint(_empty_struct, _context, value) do
+    URI.new(value)
+  end
+end
+```
+```output
+{:module, Nestru.Decoder.URI, <<70, 79, 82, 49, 0, 0, 8, ...>>, {:decode_fields_hint, 3}}
+```
+
+`Order2` is defined like this:
+
+```elixir
+defmodule Order2 do
+  @derive [Nestru.Encoder, {Nestru.Decoder, hint: %{date: DateTime, website: URI}}]
+  defstruct [:id, :date, :website]
+end
+```
+```output
+{:module, Order2, <<70, 79, 82, 49, 0, 0, 8, ...>>, %Order2{id: nil, date: nil, website: nil}}
+```
+
+We can encode it to a map with binary fields like the following:
+
+```elixir
+order = %Order2{id: "B445", date: ~U[2024-03-15 22:42:03Z], website: URI.parse("https://www.example.com/?book=branch")}
+
+{:ok, map} = Nestru.encode(order)
+```
+```output
+{:ok, %{id: "B445", date: "2024-03-15 22:42:03Z", website: "https://www.example.com/?book=branch"}}
+```
+
+And decode it back:
+
+```elixir
+Nestru.decode(map, Order2)
+```
+```output
+{:ok,
+ %Order2{
+   id: "B445",
+   date: ~U[2024-03-15 22:42:03Z],
+   website: %URI{
+     scheme: "https",
+     userinfo: nil,
+     host: "www.example.com",
+     port: 443,
+     path: "/",
+     query: "book=branch",
+     fragment: nil
+   }
+ }}
+```
+
 
 ## Error handling and path to the failed part of the map
 
@@ -158,8 +250,8 @@ defmodule House do
   defstruct [:number]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
-      if Nestru.has_key?(map, :number) do
+    def decode_fields_hint(_empty_struct, _context, value) do
+      if Nestru.has_key?(value, :number) do
         {:ok, %{}}
       else
         {:error, "Can't continue without house number."}
@@ -181,7 +273,7 @@ map = %{
   }
 }
 
-{:error, error} = Nestru.decode_from_map(map, Location)
+{:error, error} = Nestru.decode(map, Location)
 ```
 ```output
 {:error,
@@ -228,14 +320,14 @@ map = %{
   "cost_value" => 1280
 }
 
-Nestru.decode_from_map(map, Quote)
+Nestru.decode(map, Quote)
 ```
 ```output
 {:ok, %Quote{cost: 1280}}
 ```
 
 For more sophisticated key mapping you can implement 
-the `gather_fields_from_map/3` function of `Nestru.PreDecoder` explicitly.
+the `gather_fields_for_decoding/3` function of `Nestru.PreDecoder` explicitly.
 
 ## Serializing type-dependent fields
 
@@ -261,9 +353,9 @@ defmodule BookCollection do
   end
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
+    def decode_fields_hint(_empty_struct, _context, value) do
       items_kinds =
-        Enum.map(map.items_kinds, fn module_string ->
+        Enum.map(value.items_kinds, fn module_string ->
           module_string
           |> String.split(".")
           |> Module.safe_concat()
@@ -299,7 +391,7 @@ collection = %BookCollection{
   ]
 }
 
-{:ok, map} = Nestru.encode_to_map(collection)
+{:ok, map} = Nestru.encode(collection)
 ```
 ```output
 {:ok,
@@ -313,7 +405,7 @@ collection = %BookCollection{
 And restoring of the original nested struct is as simple as that:
 
 ```elixir
-{:ok, collection} = Nestru.decode_from_map(map, BookCollection)
+{:ok, collection} = Nestru.decode(map, BookCollection)
 ```
 ```output
 {:ok,
@@ -343,7 +435,7 @@ the structure of the input map is correct.
 
 [ExJsonPath library](https://hex.pm/packages/exjsonpath) allows querying maps
 (JSON objects) and lists (JSON arrays), using JSONPath expressions.
-The queries can be useful in `Nestru.PreDecoder.gather_fields_from_map/3`
+The queries can be useful in `Nestru.PreDecoder.gather_fields_for_decoding/3`
 function to assemble fields for decoding from a map having a very different shape
 from the target struct.
 
@@ -359,6 +451,17 @@ the struct's field values match its `t()` type and associated preconditions.
 <!-- Documentation -->
 
 ## Changelog
+
+### 1.0.0
+
+* Convert structs to/from binaries for better serialization of `DateTime` and `URI` to/from strings
+* Breaking changes in function names:
+  * `Nestru.PreDecoder.gather_fields_from_map/3` has been renamed to `gather_fields_for_decoding/3`
+  * `Nestru.Decoder.from_map_hint/1` has been renamed to `Nestru.Decoder.decode_fields_hint/1`
+  * `Nestru.decode_from_map/3` has been renamed to `Nestru.decode/3`
+  * `Nestru.encode_to_map/2` has been renamed to `Nestru.encode/2`
+* The `Nestru.Decoder.decode_fields_hint/3` can now return a struct as a hint as `{:ok, %struct{}}`. 
+  In this case `Nestru.decode/3` will return the struct as the decoded value.
 
 ### 0.3.3
 
@@ -376,20 +479,20 @@ the struct's field values match its `t()` type and associated preconditions.
 
 ### 0.3.0
 
-* Rename `Nestru.PreDecoder.gather_fields_map/3` to `gather_fields_from_map/3`.
-* Rename `Nestru.Encoder.encode_to_map/1` to `Nestru.Encoder.gather_fields_from_struct/2`
-* Make `encode_to_map(!)/2` work only with structs and add `encode_to_list_of_maps(!)/2` for lists.
+* Rename `Nestru.PreDecoder.gather_fields_map/3` to `gather_fields_for_decoding/3`.
+* Rename `Nestru.Encoder.encode/1` to `Nestru.Encoder.gather_fields_from_struct/2`
+* Make `encode(!)/2` work only with structs and add `encode_to_list_of_maps(!)/2` for lists.
 * Add context parameter to `encode_to_*` functions.
 
 ### 0.2.1
 
-* Fix `decode_from_map(!)/2/3` to return the error for not a map value.
+* Fix `decode(!)/2/3` to return the error for not a map value.
 
 ### 0.2.0
 
 * Fix to ensure the module is loaded before checking if it's a struct
 * Add `decode` and `encode` verbs to function names
-* Support `[Module]` hint in the map returned from `from_map_hint` to decode the list of structs
+* Support `[Module]` hint in the map returned from `decode_fields_hint` to decode the list of structs
 * Support `%{one_key: :other_key}` mapping configuration for the `PreDecoder` protocol in `@derive` attribute.
 
 ### 0.1.1

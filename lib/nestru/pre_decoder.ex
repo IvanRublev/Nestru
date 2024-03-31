@@ -2,7 +2,7 @@ defprotocol Nestru.PreDecoder do
   @fallback_to_any true
 
   @doc """
-  Returns a map to be decoded into the struct adopting the protocol.
+  Returns a map to be decoded into the struct adopting the Decoder protocol.
 
   `Nestru` calls this function as the first step of the decoding procedure.
   Useful to adapt the keys of the map to match the field names
@@ -10,19 +10,20 @@ defprotocol Nestru.PreDecoder do
 
   The first argument is an empty struct value adopting the protocol.
 
-  The second argument is the context value given to the `Nestru.decode_from_map/3` function call.
+  The second argument is the context value given to the `Nestru.decode/3` function call.
 
-  The third argument is a map given to the `Nestru.decode_from_map/3` function call.
+  The third argument is a map or a binary given to the `Nestru.decode/3` function call.
 
-  If the function returns `{:ok, decodable_map}`, then the `decodable_map`
-  will be decoded into the struct on the next step.
+  If the function returns `{:ok, map_or_binary}`, then the `map_or_binary`
+  will be decoded into the struct on the next step
+  using the hint from `Nestru.Decoder.decode_fields_hint/3`.
 
   If the function returns `{:error, message}` tuple, then decoding stops, and
   the error is bypassed to the caller.
 
   Any other return value raises an error.
 
-  The default implementation returns the input map unmodified.
+  The default implementation returns the input value unmodified.
 
   To generate the keys translating implementation, set the `@derive` module
   attribute to the tuple of `Nestru.PreDecoder` and the `:translate` option
@@ -50,13 +51,13 @@ defprotocol Nestru.PreDecoder do
 
         defimpl Nestru.PreDecoder do
           # Put values into the map with the struct's keys to be decoded later
-          def gather_fields_from_map(_value, _context, map) do
-            {:ok, %{items: Nestru.get(map, "elements"), name: "Default name"}}
+          def gather_fields_for_decoding(_empty_struct, _context, value) do
+            {:ok, %{items: Nestru.get(value, "elements"), name: "Default name"}}
           end
         end
       end
   """
-  def gather_fields_from_map(value, context, map)
+  def gather_fields_for_decoding(empty_struct, context, value)
 end
 
 defimpl Nestru.PreDecoder, for: Any do
@@ -72,9 +73,9 @@ defimpl Nestru.PreDecoder, for: Any do
 
     quote do
       defimpl Nestru.PreDecoder, for: unquote(module) do
-        def gather_fields_from_map(_value, _context, map) do
+        def gather_fields_for_decoding(_empty_struct, _context, value) do
           {:ok,
-           Enum.reduce(unquote(translation_map), map, fn {from, to}, map ->
+           Enum.reduce(unquote(translation_map), value, fn {from, to}, map ->
              Map.put(map, to, Nestru.get(map, from))
            end)}
         end
@@ -82,5 +83,5 @@ defimpl Nestru.PreDecoder, for: Any do
     end
   end
 
-  def gather_fields_from_map(_value, _context, map), do: {:ok, map}
+  def gather_fields_for_decoding(_empty_struct, _context, value), do: {:ok, value}
 end

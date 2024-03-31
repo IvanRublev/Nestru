@@ -4,9 +4,9 @@ defmodule OrderNonNegativeTotal do
   defstruct [:max_total]
 
   defimpl Nestru.Decoder do
-    def from_map_hint(_value, _context, map) do
+    def decode_fields_hint(_empty_struct, _context, value) do
       {:ok,
-       if map.max_total > 0 do
+       if value.max_total > 0 do
          %{}
        end}
     end

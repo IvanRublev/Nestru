@@ -8,10 +8,10 @@ defmodule Nestru do
              |> String.trim("\n")
 
   @doc """
-  Decodes a map into the given struct.
+  Decodes a map or a binary into the given struct.
 
-  The first argument is a map having key-value pairs. Supports both string
-  and atom keys in the map.
+  The first argument is a map having key-value pairs which supports both string
+  and atom keys. Or a binary representation, f.e. date time in ISO 8601 format.
 
   The second argument is a struct's module atom.
 
@@ -22,14 +22,17 @@ defmodule Nestru do
   for the given field, implement `Nestru.Decoder` protocol for the struct.
 
   Function calls `struct/2` to build the struct's value.
-  Keys in the map that don't exist in the struct are automatically discarded.
+  If given a map, keys that don't exist in the struct are automatically discarded.
   """
-  def decode_from_map(map, struct_module, context \\ [])
+  def decode(value, struct_module, context \\ [])
 
-  def decode_from_map(%{} = map, struct_module, context) do
-    case prepare_map(:warn, map, struct_module, context) do
+  def decode(value, struct_module, context) when is_map(value) or is_binary(value) do
+    case prepare_map(:warn, value, struct_module, context) do
       {:ok, nil} ->
         {:ok, nil}
+
+      {:ok, %_struct_module{} = struct} ->
+        {:ok, struct}
 
       {:ok, map} ->
         {:ok, struct(struct_module, map)}
@@ -38,7 +41,7 @@ defmodule Nestru do
         {:error, format_paths(map)}
 
       {:invalid_hint_shape, %{message: {struct_module, value}} = error_map} ->
-        {:error, %{error_map | message: invalid_hint_shape(struct_module, value)}}
+        {:error, %{error_map | message: invalid_decode_fields_hint_shape(struct_module, value)}}
 
       {:invalid_gather_fields_shape, struct_module, value} ->
         {:error, %{message: invalid_gather_fields_shape(struct_module, value)}}
@@ -54,22 +57,24 @@ defmodule Nestru do
     end
   end
 
-  def decode_from_map(value, struct_module, _context) do
-    {:error, %{message: invalid_map_input(struct_module, value)}}
+  def decode(value, struct_module, _context) do
+    {:error, %{message: invalid_input_to_decode(struct_module, value)}}
   end
 
   @doc """
-  Similar to `decode_from_map/3` but checks if enforced struct's fields keys exist
-  in the given map.
+  Similar to `decode/3` but checks if enforced struct's fields keys exist after decoding.
 
   Returns a struct or raises an error.
   """
-  def decode_from_map!(map, struct_module, context \\ [])
+  def decode!(value, struct_module, context \\ [])
 
-  def decode_from_map!(%{} = map, struct_module, context) do
-    case prepare_map(:raise, map, struct_module, context) do
+  def decode!(value, struct_module, context) when is_map(value) or is_binary(value) do
+    case prepare_map(:raise, value, struct_module, context) do
       {:ok, nil} ->
         nil
+
+      {:ok, %_struct_module{} = value} ->
+        value
 
       {:ok, map} ->
         struct!(struct_module, map)
@@ -78,7 +83,7 @@ defmodule Nestru do
         raise format_raise_message("map", error_map)
 
       {:invalid_hint_shape, %{message: {struct_module, value}}} ->
-        raise invalid_hint_shape(struct_module, value)
+        raise invalid_decode_fields_hint_shape(struct_module, value)
 
       {:invalid_gather_fields_shape, struct_module, value} ->
         raise invalid_gather_fields_shape(struct_module, value)
@@ -94,30 +99,34 @@ defmodule Nestru do
     end
   end
 
-  def decode_from_map!(value, struct_module, _context) do
-    raise invalid_map_input(struct_module, value)
+  def decode!(value, struct_module, _context) do
+    raise invalid_input_to_decode(struct_module, value)
   end
 
-  defp prepare_map(error_mode, map, struct_module, context) do
+  defp prepare_map(error_mode, value, struct_module, context) do
     struct_value = struct_module.__struct__()
     struct_info = {struct_value, struct_module}
 
-    with {:ok, map} <- gather_fields_from_map(struct_info, map, context),
-         {:ok, decode_hint} <- get_decode_hint(struct_info, map, context),
-         {:ok, _shaped_fields} = ok <- shape_fields(error_mode, struct_info, decode_hint, map) do
+    with {:ok, maybe_map} <- gather_fields_for_decoding(struct_info, value, context),
+         {:ok, decode_hint} <- get_decode_hint(struct_info, maybe_map, context),
+         {:ok, _shaped_fields} = ok <-
+           shape_fields(error_mode, struct_info, decode_hint, maybe_map) do
       ok
     end
   end
 
-  defp gather_fields_from_map(struct_info, map, context) do
+  defp gather_fields_for_decoding(struct_info, value, context) do
     {struct_value, struct_module} = struct_info
 
     struct_value
-    |> Nestru.PreDecoder.gather_fields_from_map(context, map)
+    |> Nestru.PreDecoder.gather_fields_for_decoding(context, value)
     |> validate_fields_map(struct_module)
   end
 
   defp validate_fields_map({:ok, %{}} = ok, _struct_module),
+    do: ok
+
+  defp validate_fields_map({:ok, binary} = ok, _struct_module) when is_binary(binary),
     do: ok
 
   defp validate_fields_map({:error, message}, _struct_module),
@@ -130,11 +139,15 @@ defmodule Nestru do
     {struct_value, struct_module} = struct_info
 
     struct_value
-    |> Nestru.Decoder.from_map_hint(context, map)
+    |> Nestru.Decoder.decode_fields_hint(context, map)
     |> validate_hint(struct_module)
   end
 
-  defp validate_hint({:ok, hint} = ok, _struct_module) when is_nil(hint) or is_map(hint),
+  defp validate_hint({:ok, hint} = ok, _struct_module)
+       when is_nil(hint) or (is_map(hint) and not is_struct(hint)) or is_binary(hint),
+       do: ok
+
+  defp validate_hint({:ok, %struct_module{}} = ok, struct_module),
     do: ok
 
   defp validate_hint({:error, %{message: _}} = error, _struct_module),
@@ -146,8 +159,12 @@ defmodule Nestru do
   defp validate_hint(value, struct_module),
     do: {:invalid_hint_shape, %{message: {struct_module, value}}}
 
-  defp shape_fields(_error_mode, _struct_info, nil = _decode_hint, _map) do
+  defp shape_fields(_error_mode, _struct_info, nil = _decode_hint, _maybe_map) do
     {:ok, nil}
+  end
+
+  defp shape_fields(_error_mode, {_, struct_module}, %struct_module{} = decode_hint, _maybe_map) do
+    {:ok, decode_hint}
   end
 
   defp shape_fields(error_mode, struct_info, decode_hint, map) do
@@ -179,7 +196,7 @@ defmodule Nestru do
   defp inform_unknown_keys(error_mode, map, struct_module, struct_keys) do
     if extra_key = List.first(Map.keys(map) -- struct_keys) do
       message = """
-      The decoding hint value for key #{inspect(extra_key)} received from Nestru.Decoder.from_map_hint/3 \
+      The decoding hint value for key #{inspect(extra_key)} received from Nestru.Decoder.decode_fields_hint/3 \
       implemented for #{inspect(struct_module)} is unexpected because the struct hasn't a field with such key name.\
       """
 
@@ -266,9 +283,9 @@ defmodule Nestru do
   defp shape_nested_struct(error_mode, map, key, map_value, module) do
     shaped_value =
       if error_mode == :raise do
-        decode_from_map!(map_value, module)
+        decode!(map_value, module)
       else
-        decode_from_map(map_value, module)
+        decode(map_value, module)
       end
 
     case shaped_value do
@@ -325,23 +342,25 @@ defmodule Nestru do
     if Map.has_key?(map, key), do: key
   end
 
-  defp invalid_map_input(struct_module, value) do
+  defp invalid_input_to_decode(struct_module, value) do
     """
-    Expected a map value received #{inspect(value)} instead. \
+    Expected a map or a binary value received #{inspect(value)} instead. \
     Can't convert it to a #{inspect(struct_module)} struct.\
     """
   end
 
   defp invalid_gather_fields_shape(struct_module, value) do
     """
-    Expected a {:ok, map} | {:error, term} value from Nestru.PreDecoder.gather_fields_from_map/3 \
+    Expected a {:ok, map | binary} | {:error, term} value from Nestru.PreDecoder.gather_fields_for_decoding/3 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
 
-  defp invalid_hint_shape(struct_module, value) do
+  defp invalid_decode_fields_hint_shape(struct_module, value) do
+    module_name = struct_module |> Module.split() |> Enum.join(".")
+
     """
-    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Decoder.from_map_hint/3 \
+    Expected a {:ok, nil | map | %#{module_name}{}} | {:error, term} value from Nestru.Decoder.decode_fields_hint/3 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
@@ -350,7 +369,7 @@ defmodule Nestru do
     """
     Expected {:ok, term}, {:error, %{message: term, path: list}}, or %{:error, term} \
     return value from the anonymous function for the key defined in the following \
-    {:ok, %{#{inspect(key)} => #{inspect(fun)}}} tuple returned from Nestru.Decoder.from_map_hint/3 \
+    {:ok, %{#{inspect(key)} => #{inspect(fun)}}} tuple returned from Nestru.Decoder.decode_fields_hint/3 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
@@ -358,7 +377,7 @@ defmodule Nestru do
   defp invalid_item_value(struct_module, key, value) do
     """
     Expected a struct's module atom, [struct_module_atom], or a function value for #{inspect(key)} key received \
-    from Nestru.Decoder.from_map_hint/3 function implemented for #{inspect(struct_module)}, \
+    from Nestru.Decoder.decode_fields_hint/3 function implemented for #{inspect(struct_module)}, \
     received #{inspect(value)} instead.\
     """
   end
@@ -366,7 +385,7 @@ defmodule Nestru do
   defp invalid_atom_for_item_with_list(struct_module, key, value) do
     """
     Unexpected #{inspect(value)} value received for #{inspect(key)} key \
-    from Nestru.Decoder.from_map_hint/3 function implemented for #{inspect(struct_module)}. \
+    from Nestru.Decoder.decode_fields_hint/3 function implemented for #{inspect(struct_module)}. \
     You can return &Nestru.decode_from_list_of_maps(&1, #{inspect(value)}) as a hint \
     for list decoding.\
     """
@@ -416,9 +435,9 @@ defmodule Nestru do
   That can be used to keep additional type information for the field that can
   have a value of various value types.
   """
-  def encode_to_map(struct, context \\ nil)
+  def encode(struct, context \\ nil)
 
-  def encode_to_map(%_{} = struct, context) do
+  def encode(%_{} = struct, context) do
     case cast_to_map(struct, context) do
       {:invalid_hint_shape, %{message: {struct_module, value}} = error_map} ->
         {:error, %{error_map | message: invalid_to_map_value_message(struct_module, value)}}
@@ -431,18 +450,18 @@ defmodule Nestru do
     end
   end
 
-  def encode_to_map(value, _context) do
-    raise expected_struct_value("encode_to_map/1", value, "encode_to_list_of_maps/1")
+  def encode(value, _context) do
+    raise expected_struct_value("encode/1", value, "encode_to_list_of_maps/1")
   end
 
   @doc """
-  Similar to `encode_to_map/1`.
+  Similar to `encode/1`.
 
   Returns a map or raises an error.
   """
-  def encode_to_map!(struct, context \\ nil)
+  def encode!(struct, context \\ nil)
 
-  def encode_to_map!(%_{} = struct, context) do
+  def encode!(%_{} = struct, context) do
     case cast_to_map(struct, context) do
       {:ok, map} ->
         map
@@ -455,8 +474,8 @@ defmodule Nestru do
     end
   end
 
-  def encode_to_map!(value, _context) do
-    raise expected_struct_value("encode_to_map!/1", value, "encode_to_list_of_maps!/1")
+  def encode!(value, _context) do
+    raise expected_struct_value("encode!/1", value, "encode_to_list_of_maps!/1")
   end
 
   defp cast_to_map(struct, context, kvi \\ nil, acc \\ {[], %{}})
@@ -524,7 +543,7 @@ defmodule Nestru do
 
   defp invalid_to_map_value_message(struct_module, value) do
     """
-    Expected a {:ok, nil | map} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 \
+    Expected a {:ok, nil | map | binary} | {:error, term} value from Nestru.Encoder.gather_fields_from_struct/2 \
     function implemented for #{inspect(struct_module)}, received #{inspect(value)} instead.\
     """
   end
@@ -539,17 +558,17 @@ defmodule Nestru do
   @doc """
   Encodes the given list of structs into a list of maps.
 
-  Calls `encode_to_map/2` for each struct in the list. The `Nestru.Encoder`
+  Calls `encode/2` for each struct in the list. The `Nestru.Encoder`
   protocol should be implemented for each struct module.
 
-  The function returns a list of maps or the first error from `encode_to_map/2` function.
+  The function returns a list of maps or the first error from `encode/2` function.
   """
   def encode_to_list_of_maps(list, context \\ nil) do
     return_value =
       list
       |> Enum.with_index()
       |> Enum.reduce_while([], fn {struct, idx}, acc ->
-        case encode_to_map(struct, context) do
+        case encode(struct, context) do
           {:ok, map} ->
             {:cont, [map | acc]}
 
@@ -623,17 +642,17 @@ defmodule Nestru do
   The first argument is a list.
 
   If the second argument is a struct's module atom, then the function calls
-  the `decode_from_map/3` on each input list item.
+  the `decode/3` on each input list item.
 
   If the second argument is a list of struct module atoms, the function
-  calls the `decode_from_map/3` function on each input list item with the module atom
+  calls the `decode/3` function on each input list item with the module atom
   taken at the same index of the second list.
   In this case, both arguments should be of equal length.
 
   The third argument is a context value to be passed to implemented
   functions of `Nestru.PreDecoder` and `Nestru.Decoder` protocols.
 
-  The function returns a list of structs or the first error from `decode_from_map/3`
+  The function returns a list of structs or the first error from `decode/3`
   function.
   """
   def decode_from_list_of_maps(list, struct_atoms, context \\ [])
@@ -674,7 +693,7 @@ defmodule Nestru do
     |> Enum.reduce_while([], fn {item, idx}, acc ->
       struct_module = Enum.at(struct_atoms, idx)
 
-      case decode_from_map(item, struct_module, context) do
+      case decode(item, struct_module, context) do
         {:ok, casted_item} ->
           {:cont, [casted_item | acc]}
 
@@ -688,7 +707,7 @@ defmodule Nestru do
     list
     |> Enum.with_index()
     |> Enum.reduce_while([], fn {item, idx}, acc ->
-      case decode_from_map(item, struct_atoms, context) do
+      case decode(item, struct_atoms, context) do
         {:ok, casted_item} ->
           {:cont, [casted_item | acc]}
 
