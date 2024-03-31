@@ -197,7 +197,7 @@ defmodule NestruDecodeTest do
 
       expected_error = """
       Unexpected Order value received for :orders key from Nestru.Decoder.decode_fields_hint/3 \
-      function implemented for OrdersBook. You can return &Nestru.decode_from_list_of_maps(&1, Order) \
+      function implemented for OrdersBook. You can return &Nestru.decode_from_list(&1, Order) \
       as a hint for list decoding.\
       """
 
@@ -350,8 +350,8 @@ defmodule NestruDecodeTest do
 
   describe "For a list of maps Nestru should" do
     test "return empty list giving empty list" do
-      assert {:ok, []} = Nestru.decode_from_list_of_maps([], Order)
-      assert [] = Nestru.decode_from_list_of_maps!([], Order)
+      assert {:ok, []} = Nestru.decode_from_list([], Order)
+      assert [] = Nestru.decode_from_list!([], Order)
     end
 
     test "shape list of structs giving struct module atom as second argument" do
@@ -359,10 +359,10 @@ defmodule NestruDecodeTest do
       maps_list = [map, map]
 
       assert {:ok, [%Order{id: "1", max_total: 500.00}, %Order{id: "1", max_total: 500.00}]} =
-               Nestru.decode_from_list_of_maps(maps_list, Order)
+               Nestru.decode_from_list(maps_list, Order)
 
       assert [%Order{id: "1", max_total: 500.00}, %Order{id: "1", max_total: 500.00}] =
-               Nestru.decode_from_list_of_maps!(maps_list, Order)
+               Nestru.decode_from_list!(maps_list, Order)
     end
 
     test "shape list of structs giving list of struct module atoms as second argument" do
@@ -375,12 +375,12 @@ defmodule NestruDecodeTest do
               [
                 %OrderNonNegativeTotal{max_total: 50_000},
                 %Order{id: "2", totals: %{sum: 345.00, discount: 20.00, total: 325.00}}
-              ]} = Nestru.decode_from_list_of_maps(maps_list, [OrderNonNegativeTotal, Order])
+              ]} = Nestru.decode_from_list(maps_list, [OrderNonNegativeTotal, Order])
 
       assert [
                %OrderNonNegativeTotal{max_total: 50_000},
                %Order{id: "2", totals: %{sum: 345.00, discount: 20.00, total: 325.00}}
-             ] = Nestru.decode_from_list_of_maps!(maps_list, [OrderNonNegativeTotal, Order])
+             ] = Nestru.decode_from_list!(maps_list, [OrderNonNegativeTotal, Order])
     end
 
     test "return first error receiving decode" do
@@ -390,17 +390,17 @@ defmodule NestruDecodeTest do
       ]
 
       assert {:error, %{message: "internal error"}} =
-               Nestru.decode_from_list_of_maps(maps_list, OrderInternalError)
+               Nestru.decode_from_list(maps_list, OrderInternalError)
 
       assert_raise RuntimeError, regex_substring("internal error"), fn ->
-        Nestru.decode_from_list_of_maps!(maps_list, OrderInternalError)
+        Nestru.decode_from_list!(maps_list, OrderInternalError)
       end
 
       assert {:error, %{message: "internal error"}} =
-               Nestru.decode_from_list_of_maps(maps_list, [Order, OrderInternalError])
+               Nestru.decode_from_list(maps_list, [Order, OrderInternalError])
 
       assert_raise RuntimeError, regex_substring("internal error"), fn ->
-        Nestru.decode_from_list_of_maps!(maps_list, [Order, OrderInternalError])
+        Nestru.decode_from_list!(maps_list, [Order, OrderInternalError])
       end
     end
 
@@ -409,11 +409,10 @@ defmodule NestruDecodeTest do
 
       expected_messge = "The first argument should be a list. Got %{} instead."
 
-      assert {:error, %{message: ^expected_messge}} =
-               Nestru.decode_from_list_of_maps(map, [Order])
+      assert {:error, %{message: ^expected_messge}} = Nestru.decode_from_list(map, [Order])
 
       assert_raise RuntimeError, regex_substring(expected_messge), fn ->
-        Nestru.decode_from_list_of_maps!(map, [Order])
+        Nestru.decode_from_list!(map, [Order])
       end
     end
 
@@ -428,11 +427,10 @@ defmodule NestruDecodeTest do
       to the struct module atoms list length (1).\
       """
 
-      assert {:error, %{message: ^expected_messge}} =
-               Nestru.decode_from_list_of_maps(maps_list, [Order])
+      assert {:error, %{message: ^expected_messge}} = Nestru.decode_from_list(maps_list, [Order])
 
       assert_raise RuntimeError, regex_substring(expected_messge), fn ->
-        Nestru.decode_from_list_of_maps!(maps_list, [Order])
+        Nestru.decode_from_list!(maps_list, [Order])
       end
     end
   end

@@ -5,7 +5,7 @@ defmodule ErroredItemsBook do
 
   defimpl Nestru.Decoder do
     def decode_fields_hint(_empty_struct, _context, _value) do
-      {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, OrderItemFunctionError)}}
+      {:ok, %{items: &Nestru.decode_from_list(&1, OrderItemFunctionError)}}
     end
   end
 end

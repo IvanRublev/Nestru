@@ -23,7 +23,7 @@ defprotocol Nestru.Decoder do
 
     * A one-element list with the module's atom (f.e. `[Module]`) specifies
       that the appropriate field's value should be decoded as a list of structs.
-      It's equivalent of returning `&Nestru.decode_from_list_of_maps(&1, module)`.
+      It's equivalent of returning `&Nestru.decode_from_list(&1, module)`.
 
     * An anonymous function with arity 1 (f.e. `&my_fun/1`) specifies
       that the appropriate field's value should be returned from the function.
@@ -77,7 +77,7 @@ defprotocol Nestru.Decoder do
         defimpl Nestru.Decoder do
           def decode_fields_hint(_empty_struct, _context, value) do
             # Give a function to decode the list field as a hint, other fields are copied as is
-            {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, FruitBox.Fruit)}}
+            {:ok, %{items: &Nestru.decode_from_list(&1, FruitBox.Fruit)}}
           end
         end
       end

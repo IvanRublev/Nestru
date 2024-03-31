@@ -220,7 +220,7 @@ defmodule Nestru do
        when is_atom(module) do
     shape_fields_recursively(
       error_mode,
-      {key, &__MODULE__.decode_from_list_of_maps(&1, module), iterator},
+      {key, &__MODULE__.decode_from_list(&1, module), iterator},
       map,
       target_map
     )
@@ -386,7 +386,7 @@ defmodule Nestru do
     """
     Unexpected #{inspect(value)} value received for #{inspect(key)} key \
     from Nestru.Decoder.decode_fields_hint/3 function implemented for #{inspect(struct_module)}. \
-    You can return &Nestru.decode_from_list_of_maps(&1, #{inspect(value)}) as a hint \
+    You can return &Nestru.decode_from_list(&1, #{inspect(value)}) as a hint \
     for list decoding.\
     """
   end
@@ -451,7 +451,7 @@ defmodule Nestru do
   end
 
   def encode(value, _context) do
-    raise expected_struct_value("encode/1", value, "encode_to_list_of_maps/1")
+    raise expected_struct_value("encode/1", value, "encode_to_list/1")
   end
 
   @doc """
@@ -475,7 +475,7 @@ defmodule Nestru do
   end
 
   def encode!(value, _context) do
-    raise expected_struct_value("encode!/1", value, "encode_to_list_of_maps!/1")
+    raise expected_struct_value("encode!/1", value, "encode_to_list!/1")
   end
 
   defp cast_to_map(struct, context, kvi \\ nil, acc \\ {[], %{}})
@@ -556,14 +556,14 @@ defmodule Nestru do
   end
 
   @doc """
-  Encodes the given list of structs into a list of maps.
+  Encodes the given list of structs into a list of values.
 
   Calls `encode/2` for each struct in the list. The `Nestru.Encoder`
   protocol should be implemented for each struct module.
 
-  The function returns a list of maps or the first error from `encode/2` function.
+  The function returns a list of values or the first error from `encode/2` function.
   """
-  def encode_to_list_of_maps(list, context \\ nil) do
+  def encode_to_list(list, context \\ nil) do
     return_value =
       list
       |> Enum.with_index()
@@ -585,12 +585,12 @@ defmodule Nestru do
   end
 
   @doc """
-  Similar to `encode_to_list_of_maps/2`
+  Similar to `encode_to_list/2`
 
   Returns list of maps or raises an error.
   """
-  def encode_to_list_of_maps!(list, context \\ nil) do
-    case encode_to_list_of_maps(list, context) do
+  def encode_to_list!(list, context \\ nil) do
+    case encode_to_list(list, context) do
       {:ok, list_of_maps} ->
         list_of_maps
 
@@ -637,17 +637,18 @@ defmodule Nestru do
   defp stringify(value), do: inspect(value)
 
   @doc """
-  Decodes a list of maps into the list of the given struct values.
+  Decodes a list of values into the list of the given structs.
 
-  The first argument is a list.
+  The first argument is an input list.
 
   If the second argument is a struct's module atom, then the function calls
-  the `decode/3` on each input list item.
+  the `decode/3` on each input list item with the given module atom
+  as the second argument.
 
   If the second argument is a list of struct module atoms, the function
   calls the `decode/3` function on each input list item with the module atom
-  taken at the same index of the second list.
-  In this case, both arguments should be of equal length.
+  taken at the same index of the second list as the second argument.
+  In this case, both lists should be of equal length.
 
   The third argument is a context value to be passed to implemented
   functions of `Nestru.PreDecoder` and `Nestru.Decoder` protocols.
@@ -655,34 +656,34 @@ defmodule Nestru do
   The function returns a list of structs or the first error from `decode/3`
   function.
   """
-  def decode_from_list_of_maps(list, struct_atoms, context \\ [])
+  def decode_from_list(list, struct_atoms, context \\ [])
 
-  def decode_from_list_of_maps(list, struct_atoms, context) when is_list(list) do
+  def decode_from_list(list, struct_atoms, context) when is_list(list) do
     list
     |> reduce_via_from_map(struct_atoms, context)
     |> maybe_ok_reverse()
   end
 
-  def decode_from_list_of_maps(list, _struct_atoms, _context) do
+  def decode_from_list(list, _struct_atoms, _context) do
     {:error, %{message: expected_list_value(list)}}
   end
 
   @doc """
-  Similar to `decode_from_list_of_maps/2` but checks if enforced struct's fields keys
+  Similar to `decode_from_list/2` but checks if enforced struct's fields keys
   exist in the given maps.
 
   Returns a struct or raises an error.
   """
-  def decode_from_list_of_maps!(list, struct_atoms, context \\ [])
+  def decode_from_list!(list, struct_atoms, context \\ [])
 
-  def decode_from_list_of_maps!(list, struct_atoms, context) when is_list(list) do
+  def decode_from_list!(list, struct_atoms, context) when is_list(list) do
     case list |> reduce_via_from_map(struct_atoms, context) |> maybe_ok_reverse() do
       {:ok, list} -> list
       {:error, %{message: message}} -> raise message
     end
   end
 
-  def decode_from_list_of_maps!(list, _struct_atoms, _context) do
+  def decode_from_list!(list, _struct_atoms, _context) do
     raise expected_list_value(list)
   end
 

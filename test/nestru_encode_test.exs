@@ -123,21 +123,21 @@ defmodule NestruEncodeTest do
       ]
 
       assert {:ok, [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}]} =
-               Nestru.encode_to_list_of_maps(list, :keep_one_field)
+               Nestru.encode_to_list(list, :keep_one_field)
 
       assert [%{max_total: 50_000}, %{max_total: 60_000}, %{max_total: 70_000}] =
-               Nestru.encode_to_list_of_maps!(list, :keep_one_field)
+               Nestru.encode_to_list!(list, :keep_one_field)
     end
 
     test "bypass error failing to encode at least one struct to map from the list" do
       assert {:error, %{message: "internal error"}} =
-               Nestru.encode_to_list_of_maps([
+               Nestru.encode_to_list([
                  %Order{id: "1", max_total: 500.00},
                  %OrderInternalError{id: "1"}
                ])
 
       assert_raise RuntimeError, regex_substring("internal error"), fn ->
-        Nestru.encode_to_list_of_maps!([
+        Nestru.encode_to_list!([
           %Order{id: "1", max_total: 500.00},
           %OrderInternalError{id: "1"}
         ])

@@ -57,7 +57,7 @@ defmodule NestruErrorPathTest do
     expected_path = [1, :orders, 1, :totals]
 
     assert {:error, %{get_in_keys: ^expected_get_in_keys, path: ^expected_path}} =
-             Nestru.encode_to_list_of_maps(list_of_structs)
+             Nestru.encode_to_list(list_of_structs)
 
     expected_regex =
       regex_substring("""
@@ -66,7 +66,7 @@ defmodule NestruErrorPathTest do
       """)
 
     assert_raise RuntimeError, expected_regex, fn ->
-      Nestru.encode_to_list_of_maps!(list_of_structs)
+      Nestru.encode_to_list!(list_of_structs)
     end
   end
 

@@ -28,7 +28,7 @@ defmodule OrdersBook do
         # wrong
         [_] -> {:ok, %{orders: Order}}
         # correct
-        [_, _] -> {:ok, %{orders: &Nestru.decode_from_list_of_maps(&1, Order)}}
+        [_, _] -> {:ok, %{orders: &Nestru.decode_from_list(&1, Order)}}
         _ -> {:ok, %{orders: [Order]}}
       end
     end
@@ -120,7 +120,7 @@ defmodule LineItemHolder do
     }
   }
 
-  def decode_items(value), do: Nestru.decode_from_list_of_maps(value, LineItem)
+  def decode_items(value), do: Nestru.decode_from_list(value, LineItem)
 
   defstruct [:items, :totals]
 end

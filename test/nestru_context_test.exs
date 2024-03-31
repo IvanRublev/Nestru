@@ -40,13 +40,13 @@ defmodule NestruContextTest do
                 %Order{max_total: 150.00},
                 %Order{max_total: 150.00},
                 %Order{max_total: 150.00}
-              ]} = Nestru.decode_from_list_of_maps(list, Order, context)
+              ]} = Nestru.decode_from_list(list, Order, context)
 
       assert [
                %Order{max_total: 150.00},
                %Order{max_total: 150.00},
                %Order{max_total: 150.00}
-             ] = Nestru.decode_from_list_of_maps!(list, [Order, Order, Order], context)
+             ] = Nestru.decode_from_list!(list, [Order, Order, Order], context)
     end
   end
 end

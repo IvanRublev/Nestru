@@ -361,7 +361,7 @@ defmodule BookCollection do
           |> Module.safe_concat()
         end)
 
-      {:ok, %{items: &Nestru.decode_from_list_of_maps(&1, items_kinds)}}
+      {:ok, %{items: &Nestru.decode_from_list(&1, items_kinds)}}
     end
   end
 end
@@ -451,6 +451,10 @@ the struct's field values match its `t()` type and associated preconditions.
 <!-- Documentation -->
 
 ## Changelog
+
+### 1.0.1
+
+* Rename list functions `decode_from_list_of_maps` to `decode_from_list` and `encode_to_list_of_maps` to `encode_to_list`
 
 ### 1.0.0
 

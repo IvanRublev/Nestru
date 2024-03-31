@@ -9,7 +9,7 @@ defprotocol Nestru.Encoder do
   The first argument is the encodable struct value adopting the protocol.
 
   The second argument is the context given to `encode/2`
-  or `encode_to_list_of_maps/2` functions.
+  or `encode_to_list/2` functions.
 
   `Nestru` calls this function as the first step of the encoding procedure.
 
