@@ -6,8 +6,8 @@ Mix.install([:nestru], force: true, consolidate_protocols: false)
 
 ## About
 
-| [![Build Status](https://travis-ci.com/IvanRublev/Nestru.svg?branch=master)](https://travis-ci.com/IvanRublev/Nestru) | [![Coverage Status](https://coveralls.io/repos/github/IvanRublev/Nestru/badge.svg)](https://coveralls.io/github/IvanRublev/Nestru) | [![hex.pm version](http://img.shields.io/hexpm/v/nestru.svg?style=flat)](https://hex.pm/packages/nestru) |
-| --------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| [![Coverage Status](https://coveralls.io/repos/github/IvanRublev/Nestru/badge.svg)](https://coveralls.io/github/IvanRublev/Nestru) | [![hex.pm version](http://img.shields.io/hexpm/v/nestru.svg?style=flat)](https://hex.pm/packages/nestru) |
+| ---------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 
 🔗 Full documentation is on [hexdocs.pm](https://hexdocs.pm/nestru/)
 
