@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     name: OTP ${{ matrix.otp }} / Elixir ${{ matrix.elixir }}
     strategy:
       matrix:
@@ -23,7 +23,7 @@ jobs:
             elixir: 1.14.4
     steps:
       - uses: actions/checkout@v4
-      - uses: erlef/setup-beam@v1
+      - uses: erlef/setup-beam@v1.15
         with:
           otp-version: ${{matrix.otp}}
           elixir-version: ${{matrix.elixir}}
